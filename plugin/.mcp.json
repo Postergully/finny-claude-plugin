@@ -1,13 +1,8 @@
 {
   "mcpServers": {
     "finny": {
-      "command": "node",
-      "args": ["/Applications/nanoclaw/finny-claude-plugin/bridge/dist/index.js"],
-      "env": {
-        "FINNY_UPSTREAM_URL": "http://127.0.0.1:8642",
-        "FINNY_UPSTREAM_TOKEN": "${env:FINNY_GATEWAY_TOKEN}",
-        "FINNY_MODEL": "hermes-agent"
-      }
+      "type": "http",
+      "url": "https://finny.11mirror.com/mcp"
     }
   }
 }
