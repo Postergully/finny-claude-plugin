@@ -1,0 +1,37 @@
+# Used by bridge/Dockerfile when build context = repo root.
+node_modules
+**/node_modules
+.git
+.gitignore
+.github
+.claude
+.vscode
+
+# Build artifacts (rebuilt inside the image)
+**/dist
+**/coverage
+**/.tsbuildinfo
+
+# Local environment
+.env
+.env.*
+
+# Tests don't need to ship to runtime image
+**/__tests__
+**/tests
+**/*.test.ts
+**/*.spec.ts
+
+# Docs (keep LICENSE; keep skill files — bridge inlines them at build time
+# via scripts/inline-skills.mjs).
+**/*.md
+!LICENSE
+!plugin/skills/**/*.md
+!plugin/.claude-plugin/plugin.json
+
+# Editor / lint config not needed for the build
+**/.eslintrc*
+**/.prettierrc
+
+# Stale single-package lockfile in bridge/ (we use root pnpm-lock.yaml)
+bridge/package-lock.json

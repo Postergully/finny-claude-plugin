@@ -1,0 +1,30 @@
+{
+  "_synthesized": true,
+  "status": "ok",
+  "intent_restated": "Count the total number of vendor records in the production NetSuite account.",
+  "assumptions": [
+    "Counted all rows in the vendor table regardless of isinactive flag — inactive vendors included.",
+    "Used SuiteQL against the production NetSuite REST service per entity_hints.env.",
+    "Sign conventions not applicable to a count."
+  ],
+  "unanswered": [],
+  "data": {
+    "shape": "scalar",
+    "value": 14273,
+    "rendered_markdown": "**14,273** vendor records"
+  },
+  "sources": [
+    {
+      "kind": "suiteql",
+      "ref": "SELECT COUNT(*) FROM vendor",
+      "rows_scanned": 14273
+    }
+  ],
+  "confidence": "high",
+  "confidence_reason": "Single deterministic COUNT(*) against vendor table; no filters or ambiguity.",
+  "task_id": "task_01JXYZABC123DEADLINE5S",
+  "elapsed_ms": 47218,
+  "env_used": "production",
+  "bridge_version": "redacted",
+  "lolly_session_id": "redacted"
+}

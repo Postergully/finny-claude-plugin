@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "intent_restated": "Compute 2 + 2 and return only the number.",
+  "assumptions": [
+    "No NetSuite data required; computed locally.",
+    "Defaulted environment to production; no SuiteQL/REST calls executed.",
+    "Sign conventions not applicable."
+  ],
+  "unanswered": [],
+  "data": {
+    "shape": "scalar",
+    "value": 4,
+    "rendered_markdown": "4"
+  },
+  "sources": [],
+  "confidence": "high",
+  "confidence_reason": "Deterministic arithmetic result.",
+  "elapsed_ms": 75828,
+  "env_used": "production",
+  "bridge_version": "redacted",
+  "lolly_session_id": "redacted"
+}

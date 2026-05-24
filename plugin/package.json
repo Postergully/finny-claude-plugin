@@ -1,0 +1,7 @@
+{
+  "name": "@postergully/lolly-plugin",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Claude cowork plugin bundle for Lolly. Declarative: plugin metadata, .mcp.json, and SKILL.md files only.",
+  "license": "MIT"
+}

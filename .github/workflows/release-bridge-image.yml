@@ -1,0 +1,98 @@
+name: Release bridge image
+
+# Builds the MCP bridge container and publishes to GHCR on every SemVer
+# tag push. Tags follow F3's plugin/bridge version-lockstep policy — the
+# git tag (e.g. `v0.3.0`) matches both `plugin/.claude-plugin/plugin.json`
+# and `bridge/package.json`, so the image tag matches both as well.
+#
+# Production EC2 hosts pull this image via systemd unit
+# `lolly-bridge.service` (in nanoclaw repo at infra/host/systemd/) using
+# the `BRIDGE_TAG` env var sourced from `/etc/lolly/tenant.env`.
+#
+# Triggered only on tag push, never on branch push, to keep the registry
+# from filling up with intermediate builds.
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g. v0.3.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: postergully/lolly-mcp
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            REF="${{ inputs.tag }}"
+          else
+            REF="${GITHUB_REF#refs/tags/}"
+          fi
+          # Strip leading "v" for the package.json comparison; keep it
+          # for the image tag so it visually matches the git tag.
+          VERSION="${REF#v}"
+          echo "tag=$REF" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Verify lockstep (plugin = bridge = git tag)
+        run: |
+          PLUGIN=$(jq -r .version plugin/.claude-plugin/plugin.json)
+          BRIDGE=$(jq -r .version bridge/package.json)
+          GIT="${{ steps.version.outputs.version }}"
+          echo "plugin=$PLUGIN bridge=$BRIDGE git=$GIT"
+          if [ "$PLUGIN" != "$BRIDGE" ] || [ "$BRIDGE" != "$GIT" ]; then
+            echo "::error::Lockstep violation: plugin=$PLUGIN bridge=$BRIDGE git=$GIT must all match" >&2
+            exit 1
+          fi
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          # Repo root context (not bridge/) — the Dockerfile uses pnpm
+          # workspace install which needs pnpm-workspace.yaml + the
+          # workspace pnpm-lock.yaml.
+          context: .
+          file: bridge/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+          provenance: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

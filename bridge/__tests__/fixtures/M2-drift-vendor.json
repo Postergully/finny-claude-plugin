@@ -1,0 +1,19 @@
+{
+  "status": "error",
+  "intent_restated": "unable to process query",
+  "assumptions": [],
+  "unanswered": [],
+  "data": null,
+  "sources": [],
+  "confidence": "low",
+  "confidence_reason": "Correction retry still invalid: Invalid enum value. Expected 'envelope_parse_failed' | 'gateway_rejected' | 'gateway_unreachable' | 'timeout' | 'unauthorized' | 'refused' | 'internal', received 'appro",
+  "error": {
+    "code": "envelope_parse_failed",
+    "message": "Correction retry still invalid: Invalid enum value. Expected 'envelope_parse_failed' | 'gateway_rejected' | 'gateway_unreachable' | 'timeout' | 'unauthorized' | 'refused' | 'internal', received 'approval_required'",
+    "retryable": false
+  },
+  "elapsed_ms": 193051,
+  "env_used": "production",
+  "bridge_version": "redacted",
+  "lolly_session_id": "redacted"
+}

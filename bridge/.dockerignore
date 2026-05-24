@@ -1,0 +1,23 @@
+node_modules
+.git
+.gitignore
+.env*
+dist
+
+# Documentation (keep LICENSE)
+*.md
+!LICENSE.md
+docs/
+
+# CI/CD and editor config
+.github
+.claude
+.vscode
+
+# Test and coverage
+tests
+coverage
+
+# Config files not needed at runtime
+.eslintrc*
+.prettierrc

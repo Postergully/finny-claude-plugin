@@ -1,0 +1,7 @@
+[
+  {
+    "name": "lolly-day-dream",
+    "command": "${CLAUDE_PLUGIN_ROOT}/bin/day-dream-poll.sh",
+    "description": "Hourly poll; emits 'day_dream-trigger' to stdout at 18:00 local time. Cowork picks up the line as a notification triggering /lolly:day_dream."
+  }
+]

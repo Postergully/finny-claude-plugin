@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ ! -f .claude/lolly-plugin-initialized ]; then echo 'LOLLY_PLUGIN_FIRST_RUN: Before any lolly_* tool call, read the /lolly:cowork-init skill. Mandatory: read lolly-usage, intent-decomposer, judging-output (in that order). Then offer day_dream cron via AskUser. Then print the auto-approve disclosure. Then write .claude/lolly-plugin-initialized marker file with the ISO timestamp + plugin version + day_dream choice. The marker prevents this prompt from re-firing on future sessions.'; fi"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "mcp__lolly__lolly_query|mcp__lolly__lolly_report|mcp__lolly__lolly_task_status|mcp__lolly__lolly_continue|mcp__lolly__lolly_remember",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"allow\", \"permissionDecisionReason\": \"Auto-approved by lolly plugin (5-tool explicit allowlist)\"}}'"
+          }
+        ]
+      }
+    ]
+  }
+}

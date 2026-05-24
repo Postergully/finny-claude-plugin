@@ -1,0 +1,134 @@
+{
+  "entries": [
+    {
+      "id": "p&l_statement",
+      "version": "1.0",
+      "aliases": [],
+      "deprecated": false,
+      "required_scope": [
+        {
+          "name": "entity",
+          "type": "string",
+          "strict_nonempty": true,
+          "description": "ShareChat entity name. Lolly resolves to NetSuite IDs at execute time using her brain — do NOT pin to a static enum, since the entity list changes when ShareChat acquires or restructures."
+        },
+        {
+          "name": "consolidated",
+          "type": "bool",
+          "default": false,
+          "description": "If true, includes all subsidiaries rolled up. If false, the named entity is reported standalone."
+        },
+        {
+          "name": "period",
+          "type": "period",
+          "description": "Reporting window. Object with from / to in YYYY-MM-DD."
+        },
+        {
+          "name": "env",
+          "type": "enum",
+          "options": ["sandbox", "production"],
+          "default": "production",
+          "description": "NetSuite environment. Sign conventions are FLIPPED between sandbox and production — never silently switch."
+        }
+      ],
+      "optional_scope": [
+        {
+          "name": "comparison_period",
+          "type": "period",
+          "description": "If supplied, adds a prior-period column for variance analysis."
+        }
+      ],
+      "scope_doc": "Profit & loss aggregated by GL account for the resolved entity over period. Honor consolidated flag (true=roll up subsidiaries; false=standalone). Apply ShareChat sign conventions per MEMORY.md 'NetSuite rules' section — sandbox and production have flipped signs. Open-balance components are NOT part of P&L. Group rows by GL account; preserve money decimal places."
+    },
+    {
+      "id": "vendor_balance",
+      "version": "1.0",
+      "aliases": [],
+      "deprecated": false,
+      "required_scope": [
+        {
+          "name": "vendor_ref",
+          "type": "string",
+          "strict_nonempty": true,
+          "description": "Either NetSuite vendor_id (preferred) or vendor_name. If vendor_name resolves to multiple vendors and gstin is absent, return needs_input with the candidates."
+        },
+        {
+          "name": "env",
+          "type": "enum",
+          "options": ["sandbox", "production"],
+          "default": "production",
+          "description": "NetSuite environment. Sign conventions flipped between sandbox and production."
+        }
+      ],
+      "optional_scope": [
+        {
+          "name": "as_of_date",
+          "type": "date",
+          "description": "Compute the balance as of this date instead of today."
+        },
+        {
+          "name": "gstin",
+          "type": "string",
+          "description": "Disambiguator when vendor_name has multiple matches and the caller knows the GSTIN."
+        }
+      ],
+      "scope_doc": "Open balance = VendBill (status IN ('A','D')) + VPrep + Journal + BillCredit per MEMORY.md. NEVER use status='A' alone — D (drafts) are also open. If vendor_name resolves to multiple vendors and gstin is absent, return status: 'needs_input' with the matching candidates as options. Apply env-specific sign convention. GSTIN comes from REST taxRegistration, not SuiteQL."
+    },
+    {
+      "id": "cash_position",
+      "version": "1.0",
+      "aliases": [],
+      "deprecated": false,
+      "required_scope": [
+        {
+          "name": "as_of_date",
+          "type": "date",
+          "description": "Snapshot date for the cash balance."
+        },
+        {
+          "name": "env",
+          "type": "enum",
+          "options": ["sandbox", "production"],
+          "default": "production"
+        }
+      ],
+      "optional_scope": [
+        {
+          "name": "by_account",
+          "type": "bool",
+          "default": false,
+          "description": "If true, break out per bank account; otherwise return total."
+        }
+      ],
+      "scope_doc": "Snapshot cash + cash-equivalent GL balances as of the given date. The canonical cash GL set lives in MEMORY.md. If by_account=true, return rows envelope (account, balance); otherwise scalar (total). Apply env-specific sign conventions. Do NOT include AR or VendBill — those are receivables/payables, not cash."
+    },
+    {
+      "id": "transaction_lookup",
+      "version": "1.0",
+      "aliases": [],
+      "deprecated": false,
+      "required_scope": [
+        {
+          "name": "transaction_type",
+          "type": "enum",
+          "options": ["VendBill", "Invoice", "Journal", "PurchOrd", "VPrep", "BillCredit", "Payment"],
+          "description": "NetSuite transaction record type."
+        },
+        {
+          "name": "transaction_id",
+          "type": "string",
+          "strict_nonempty": true,
+          "description": "Internal NetSuite ID of the transaction."
+        },
+        {
+          "name": "env",
+          "type": "enum",
+          "options": ["sandbox", "production"],
+          "default": "production"
+        }
+      ],
+      "optional_scope": [],
+      "scope_doc": "Single-record fetch by NetSuite transaction type + internal ID. Return narrative envelope rendering the record's key fields (preserve money decimal places, dates in NetSuite native format, GSTIN as-is). For VendBill, surface bill_date, due_date, vendor_ref, total, and status code (A=open approved, D=draft, etc.) explicitly."
+    }
+  ]
+}

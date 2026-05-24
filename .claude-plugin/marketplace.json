@@ -1,0 +1,13 @@
+{
+  "name": "postergully-lolly-claude-plugin",
+  "owner": {
+    "name": "Postergully"
+  },
+  "plugins": [
+    {
+      "name": "lolly",
+      "source": "./plugin",
+      "description": "Lolly NetSuite agent — cowork-side discipline plugin"
+    }
+  ]
+}

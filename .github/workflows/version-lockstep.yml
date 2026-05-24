@@ -1,0 +1,40 @@
+name: Version Lockstep
+
+# Enforces F3 (productionization findings, locked decision):
+# plugin/.claude-plugin/plugin.json `version` must equal bridge/package.json `version`.
+# Marketplace consumers rely on the plugin version for upgrade detection; the bridge
+# bundles the plugin's MCP surface contract, so a bridge change without a plugin bump
+# would silently ship behavior changes. Lockstep keeps the two in sync.
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'plugin/.claude-plugin/plugin.json'
+      - 'bridge/package.json'
+      - '.github/workflows/version-lockstep.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'plugin/.claude-plugin/plugin.json'
+      - 'bridge/package.json'
+      - '.github/workflows/version-lockstep.yml'
+
+jobs:
+  check-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Compare plugin and bridge versions
+        run: |
+          PLUGIN_VERSION=$(node -p "require('./plugin/.claude-plugin/plugin.json').version")
+          BRIDGE_VERSION=$(node -p "require('./bridge/package.json').version")
+          echo "plugin.json:    $PLUGIN_VERSION"
+          echo "bridge package: $BRIDGE_VERSION"
+          if [ "$PLUGIN_VERSION" != "$BRIDGE_VERSION" ]; then
+            echo "::error::Version drift: plugin.json ($PLUGIN_VERSION) != bridge/package.json ($BRIDGE_VERSION). Bump both."
+            exit 1
+          fi
+          echo "OK: versions match ($PLUGIN_VERSION)"

@@ -1,0 +1,214 @@
+{
+  "meta": {
+    "timestamp": "2026-05-12T09-21-17",
+    "bridge_head": "f0bc905",
+    "scenarios_total": 10,
+    "scenarios_completed": 10,
+    "scenarios_skipped_or_errored": 0,
+    "global_cap_ms": 900000,
+    "elapsed_ms": 267020
+  },
+  "metrics": {
+    "drift_caught_rate_pct": 40,
+    "tool_selection_accuracy_pct": 100,
+    "envelope_overhead_pct_median": 0,
+    "envelope_parse_ms_median": 0,
+    "round_trip_ms_median": 32536
+  },
+  "scenarios": [
+    {
+      "id": "01-vendor-balance-prod",
+      "expectedTool": "lolly_report",
+      "toolUsed": "lolly_report",
+      "toolMatch": true,
+      "status": "running",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 60064,
+      "envelopeParseMs": 1,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "intentRestated": "Return the current open balance for vendor \"Acme\" in production. Apply the ShareChat sandbox-vs-production sign conventions (signs flip between envs — see MEMORY.md). Open balance includes Bill + Jour",
+        "taskId": "task_mp2f2h0e_0001"
+      }
+    },
+    {
+      "id": "02-vendor-balance-sandbox",
+      "expectedTool": "lolly_report",
+      "toolUsed": "lolly_report",
+      "toolMatch": true,
+      "status": "refused",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 53616,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "sandbox",
+        "errorCode": "gateway_unreachable",
+        "errorMessage": "NetSuite SuiteQL/REST sandbox endpoint is unreachable in this session; cannot execute the minimal required queries.",
+        "intentRestated": "Return the current open balance for vendor “Acme” in the sandbox, aggregating Bills, Journals, Vendor Prepayments, and Bill Credits with ShareChat’s sandbox sign conventions, disambiguated by Vendor I"
+      }
+    },
+    {
+      "id": "03-open-bills-list",
+      "expectedTool": "lolly_report",
+      "toolUsed": "lolly_report",
+      "toolMatch": true,
+      "status": "refused",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 36255,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "errorCode": "unauthorized",
+        "errorMessage": "NetSuite production API access is not available in this session, so I cannot run the SuiteQL needed to list open bills for 'Beta'.",
+        "intentRestated": "List all open vendor bills for the vendor named \"Beta\" in NetSuite production, where VendBill status is in ('A','D'), returning bill_id, tranid, trandate, amount, due_date, and days_overdue with Share"
+      }
+    },
+    {
+      "id": "04-gstin-lookup",
+      "expectedTool": "lolly_report",
+      "toolUsed": "lolly_report",
+      "toolMatch": true,
+      "status": "refused",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 18680,
+      "envelopeParseMs": 1,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "errorCode": "unauthorized",
+        "errorMessage": "NetSuite production REST access is unavailable in this session, so I cannot retrieve GSTINs via taxRegistration.",
+        "intentRestated": "Fetch the GSTIN(s) for vendor \"Gamma\" in NetSuite production using the REST taxRegistration endpoint, returning all GSTINs with Vendor IDs if multiple vendors named Gamma exist."
+      }
+    },
+    {
+      "id": "05-vendor-disambiguation",
+      "expectedTool": "lolly_report",
+      "toolUsed": "lolly_report",
+      "toolMatch": true,
+      "status": "refused",
+      "envelopeValid": true,
+      "driftCaught": true,
+      "driftDetails": [
+        "disambiguation-surfaced: 2 unanswered items"
+      ],
+      "elapsedMs": 32536,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "errorCode": "unauthorized",
+        "errorMessage": "NetSuite production API access is unavailable in this session, so I cannot compute Delta’s open balance.",
+        "intentRestated": "Return the current open balance for vendor \"Delta\" in NetSuite production, summing Bills, Journals, Vendor Prepayments, and Bill Credits with ShareChat production sign conventions, disambiguating by V"
+      }
+    },
+    {
+      "id": "06-slow-async-query",
+      "expectedTool": "lolly_query",
+      "toolUsed": "lolly_query",
+      "toolMatch": true,
+      "status": "running",
+      "envelopeValid": true,
+      "driftCaught": true,
+      "driftDetails": [
+        "async-path-fired: task_id=task_mp2f6s81_00..."
+      ],
+      "elapsedMs": 2022,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "intentRestated": "How many vendor records exist in production?",
+        "taskId": "task_mp2f6s81_0006"
+      }
+    },
+    {
+      "id": "07-approval-required",
+      "expectedTool": "lolly_query",
+      "toolUsed": "lolly_query",
+      "toolMatch": true,
+      "status": "refused",
+      "envelopeValid": true,
+      "driftCaught": true,
+      "driftDetails": [
+        "escape-valve-fired: status=refused, error.code=refused, msg=Destructive request: deleting posted vendor bills is not all"
+      ],
+      "elapsedMs": 37358,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "high",
+        "envUsed": "production",
+        "errorCode": "refused",
+        "errorMessage": "Destructive request: deleting posted vendor bills is not allowed. Propose reversal/credit/void workflow instead.",
+        "intentRestated": "Delete all overdue vendor bills from last quarter in NetSuite production."
+      }
+    },
+    {
+      "id": "08-suiteql-read",
+      "expectedTool": "lolly_executeSuiteQL",
+      "toolUsed": "lolly_executeSuiteQL",
+      "toolMatch": true,
+      "status": "error",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 12540,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "errorCode": "envelope_parse_failed",
+        "errorMessage": "SuiteQL envelope validation failed: Required",
+        "intentRestated": "Execute SuiteQL: judge-loop scenario 08: smoke-test read-only SuiteQL path"
+      }
+    },
+    {
+      "id": "09-suiteql-write-blocked",
+      "expectedTool": "lolly_executeSuiteQL",
+      "toolUsed": "lolly_executeSuiteQL",
+      "toolMatch": true,
+      "status": "refused",
+      "envelopeValid": true,
+      "driftCaught": true,
+      "driftDetails": [
+        "write-guard-fired: refused in 0ms (no gateway call)"
+      ],
+      "elapsedMs": 0,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "sandbox",
+        "intentRestated": "Execute SuiteQL: judge-loop scenario 09: write-verb guard smoke test"
+      }
+    },
+    {
+      "id": "10-cross-env-drift",
+      "expectedTool": "lolly_query",
+      "toolUsed": "lolly_query",
+      "toolMatch": true,
+      "status": "refused",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 13940,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "errorCode": "unauthorized",
+        "errorMessage": "NetSuite production API access is unavailable in this session, so I cannot execute the count query.",
+        "intentRestated": "Return the current count of open vendor bills in NetSuite production right now."
+      }
+    }
+  ]
+}

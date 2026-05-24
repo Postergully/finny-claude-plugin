@@ -1,0 +1,86 @@
+name: Publish to MCP Registry
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Sync server.json version with release tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [ -z "$VERSION" ] || [ "$VERSION" = "$GITHUB_REF_NAME" ]; then
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          echo "Publishing version: $VERSION"
+          node -e "
+            const fs = require('fs');
+            const s = JSON.parse(fs.readFileSync('server.json', 'utf8'));
+            s.version = '$VERSION';
+            for (const p of s.packages || []) {
+              if (p.registryType === 'oci' && typeof p.identifier === 'string') {
+                p.identifier = p.identifier.replace(/:[^:/]+\$/, ':$VERSION');
+                delete p.version;
+              } else {
+                p.version = '$VERSION';
+              }
+            }
+            fs.writeFileSync('server.json', JSON.stringify(s, null, 2) + '\n');
+          "
+          cat server.json
+
+      - name: Wait for npm package to be available
+        run: |
+          VERSION=$(node -p "require('./server.json').version")
+          echo "Waiting for openclaw-mcp@$VERSION on npm..."
+          for i in $(seq 1 60); do
+            if npm view "openclaw-mcp@$VERSION" version 2>/dev/null | grep -q "^$VERSION$"; then
+              echo "Package available."
+              exit 0
+            fi
+            echo "Not yet (attempt $i/60), sleeping 10s..."
+            sleep 10
+          done
+          echo "Timed out waiting for npm package."
+          exit 1
+
+      - name: Wait for OCI image to be available
+        run: |
+          VERSION=$(node -p "require('./server.json').version")
+          echo "Waiting for ghcr.io/freema/openclaw-mcp:$VERSION..."
+          TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:freema/openclaw-mcp:pull" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d).token))")
+          for i in $(seq 1 60); do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json" \
+              "https://ghcr.io/v2/freema/openclaw-mcp/manifests/$VERSION")
+            if [ "$CODE" = "200" ]; then
+              echo "Image available."
+              exit 0
+            fi
+            echo "Not yet (HTTP $CODE, attempt $i/60), sleeping 10s..."
+            sleep 10
+          done
+          echo "Timed out waiting for OCI image."
+          exit 1
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" \
+            | tar xz mcp-publisher
+          chmod +x mcp-publisher
+
+      - name: Login to MCP Registry (GitHub OIDC)
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        run: ./mcp-publisher publish

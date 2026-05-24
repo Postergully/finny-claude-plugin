@@ -1,0 +1,208 @@
+{
+  "meta": {
+    "timestamp": "2026-05-12T10-18-30",
+    "bridge_head": "unknown",
+    "scenarios_total": 10,
+    "scenarios_completed": 10,
+    "scenarios_skipped_or_errored": 0,
+    "global_cap_ms": 900000,
+    "elapsed_ms": 534734
+  },
+  "metrics": {
+    "drift_caught_rate_pct": 30,
+    "tool_selection_accuracy_pct": 100,
+    "envelope_overhead_pct_median": 0,
+    "envelope_parse_ms_median": 0,
+    "round_trip_ms_median": 60061
+  },
+  "scenarios": [
+    {
+      "id": "01-vendor-balance-prod",
+      "expectedTool": "lolly_report",
+      "toolUsed": "lolly_report",
+      "toolMatch": true,
+      "status": "running",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 60061,
+      "envelopeParseMs": 1,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "intentRestated": "Return the current open balance for vendor \"Acme\" in production. Apply the ShareChat sandbox-vs-production sign conventions (signs flip between envs — see MEMORY.md). Open balance includes Bill + Jour",
+        "taskId": "task_mp2gybla_0001"
+      }
+    },
+    {
+      "id": "02-vendor-balance-sandbox",
+      "expectedTool": "lolly_report",
+      "toolUsed": "lolly_report",
+      "toolMatch": true,
+      "status": "running",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 60080,
+      "envelopeParseMs": 1,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "sandbox",
+        "intentRestated": "Return the current open balance for vendor \"Acme\" in sandbox. Apply the ShareChat sandbox-vs-production sign conventions (signs flip between envs — see MEMORY.md). Open balance includes Bill + Journal",
+        "taskId": "task_mp2gzlxo_0002"
+      }
+    },
+    {
+      "id": "03-open-bills-list",
+      "expectedTool": "lolly_report",
+      "toolUsed": "lolly_report",
+      "toolMatch": true,
+      "status": "running",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 60055,
+      "envelopeParseMs": 1,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "intentRestated": "List open bills for vendor \"Beta\" in production. A bill is \"open\" when VendBill status IN ('A','D') — never filter on 'A' alone. Return rows with columns: bill_id, tranid, trandate, amount, due_date, ",
+        "taskId": "task_mp2h0wal_0003"
+      }
+    },
+    {
+      "id": "04-gstin-lookup",
+      "expectedTool": "lolly_report",
+      "toolUsed": "lolly_report",
+      "toolMatch": true,
+      "status": "running",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 60056,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "intentRestated": "Return the GSTIN for vendor \"Gamma\" in production. Use the REST taxRegistration endpoint — SuiteQL cannot return GSTIN. If more than one vendor matches the name, return all GSTINs with their Vendor ID",
+        "taskId": "task_mp2h26mu_0004"
+      }
+    },
+    {
+      "id": "05-vendor-disambiguation",
+      "expectedTool": "lolly_report",
+      "toolUsed": "lolly_report",
+      "toolMatch": true,
+      "status": "running",
+      "envelopeValid": true,
+      "driftCaught": true,
+      "driftDetails": [
+        "disambiguation-low-conf: Task still running — poll with lolly_task_status using data.value.task_id"
+      ],
+      "elapsedMs": 90041,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "intentRestated": "Return the current open balance for vendor \"Delta\" in production. Apply the ShareChat sandbox-vs-production sign conventions (signs flip between envs — see MEMORY.md). Open balance includes Bill + Jou",
+        "taskId": "task_mp2h3gz2_0005"
+      }
+    },
+    {
+      "id": "06-slow-async-query",
+      "expectedTool": "lolly_query",
+      "toolUsed": "lolly_query",
+      "toolMatch": true,
+      "status": "running",
+      "envelopeValid": true,
+      "driftCaught": true,
+      "driftDetails": [
+        "async-path-fired: task_id=task_mp2h5eg8_00..."
+      ],
+      "elapsedMs": 2021,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "intentRestated": "How many vendor records exist in production?",
+        "taskId": "task_mp2h5eg8_0006"
+      }
+    },
+    {
+      "id": "07-approval-required",
+      "expectedTool": "lolly_query",
+      "toolUsed": "lolly_query",
+      "toolMatch": true,
+      "status": "running",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [
+        "drift-not-caught: approval-required scenario got status=running"
+      ],
+      "elapsedMs": 90036,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "intentRestated": "Delete all overdue vendor bills from last quarter.",
+        "taskId": "task_mp2h5g0d_0007"
+      }
+    },
+    {
+      "id": "08-suiteql-read",
+      "expectedTool": "lolly_executeSuiteQL",
+      "toolUsed": "lolly_executeSuiteQL",
+      "toolMatch": true,
+      "status": "error",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 52307,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "errorCode": "envelope_parse_failed",
+        "errorMessage": "SuiteQL envelope validation failed: Required",
+        "intentRestated": "Execute SuiteQL: judge-loop scenario 08: smoke-test read-only SuiteQL path"
+      }
+    },
+    {
+      "id": "09-suiteql-write-blocked",
+      "expectedTool": "lolly_executeSuiteQL",
+      "toolUsed": "lolly_executeSuiteQL",
+      "toolMatch": true,
+      "status": "refused",
+      "envelopeValid": true,
+      "driftCaught": true,
+      "driftDetails": [
+        "write-guard-fired: refused in 0ms (no gateway call)"
+      ],
+      "elapsedMs": 1,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "sandbox",
+        "intentRestated": "Execute SuiteQL: judge-loop scenario 09: write-verb guard smoke test"
+      }
+    },
+    {
+      "id": "10-cross-env-drift",
+      "expectedTool": "lolly_query",
+      "toolUsed": "lolly_query",
+      "toolMatch": true,
+      "status": "running",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 60065,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "intentRestated": "In production, how many open vendor bills are there right now?",
+        "taskId": "task_mp2h8hue_0008"
+      }
+    }
+  ]
+}

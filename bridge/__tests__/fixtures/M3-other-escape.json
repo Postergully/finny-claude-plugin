@@ -1,0 +1,31 @@
+{
+  "_synthesized": true,
+  "status": "error",
+  "intent_restated": "Get the open balance for vendor \"Reliance\" in production.",
+  "assumptions": [
+    "Searched the vendor table for entityid or companyname matching 'Reliance' (case-insensitive).",
+    "Did NOT sum balances across matches — ambiguous which Reliance entity the caller meant."
+  ],
+  "unanswered": [
+    "Which Reliance vendor? Found 3 candidates with distinct Vendor IDs and GSTINs."
+  ],
+  "data": null,
+  "sources": [
+    {
+      "kind": "suiteql",
+      "ref": "SELECT id, entityid, companyname FROM vendor WHERE LOWER(companyname) LIKE '%reliance%'",
+      "rows_scanned": 3
+    }
+  ],
+  "confidence": "low",
+  "confidence_reason": "Name 'Reliance' matches 3 distinct vendors; cannot proceed without disambiguation (Vendor ID + GSTIN).",
+  "error": {
+    "code": "other",
+    "message": "approval_required",
+    "retryable": false
+  },
+  "elapsed_ms": 8421,
+  "env_used": "production",
+  "bridge_version": "redacted",
+  "lolly_session_id": "redacted"
+}

@@ -1,0 +1,233 @@
+{
+  "meta": {
+    "timestamp": "2026-05-12T11-05-40",
+    "bridge_head": "e75e241",
+    "scenarios_total": 11,
+    "scenarios_completed": 11,
+    "scenarios_skipped_or_errored": 0,
+    "global_cap_ms": 900000,
+    "elapsed_ms": 836
+  },
+  "metrics": {
+    "drift_caught_rate_pct": 36.36363636363637,
+    "tool_selection_accuracy_pct": 100,
+    "envelope_overhead_pct_median": 0,
+    "envelope_parse_ms_median": 0,
+    "round_trip_ms_median": 101
+  },
+  "scenarios": [
+    {
+      "id": "01-vendor-balance-prod",
+      "expectedTool": "lolly_report",
+      "toolUsed": "lolly_report",
+      "toolMatch": true,
+      "status": "error",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 103,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "errorCode": "internal",
+        "errorMessage": "API request failed: 401 Unauthorized",
+        "intentRestated": "unable to process query"
+      }
+    },
+    {
+      "id": "02-vendor-balance-sandbox",
+      "expectedTool": "lolly_report",
+      "toolUsed": "lolly_report",
+      "toolMatch": true,
+      "status": "error",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 101,
+      "envelopeParseMs": 1,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "sandbox",
+        "errorCode": "internal",
+        "errorMessage": "API request failed: 401 Unauthorized",
+        "intentRestated": "unable to process query"
+      }
+    },
+    {
+      "id": "03-open-bills-list",
+      "expectedTool": "lolly_report",
+      "toolUsed": "lolly_report",
+      "toolMatch": true,
+      "status": "error",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 101,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "errorCode": "internal",
+        "errorMessage": "API request failed: 401 Unauthorized",
+        "intentRestated": "unable to process query"
+      }
+    },
+    {
+      "id": "04-gstin-lookup",
+      "expectedTool": "lolly_report",
+      "toolUsed": "lolly_report",
+      "toolMatch": true,
+      "status": "error",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 101,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "errorCode": "internal",
+        "errorMessage": "API request failed: 401 Unauthorized",
+        "intentRestated": "unable to process query"
+      }
+    },
+    {
+      "id": "05-vendor-disambiguation",
+      "expectedTool": "lolly_report",
+      "toolUsed": "lolly_report",
+      "toolMatch": true,
+      "status": "error",
+      "envelopeValid": true,
+      "driftCaught": true,
+      "driftDetails": [
+        "disambiguation-low-conf: API request failed: 401 Unauthorized"
+      ],
+      "elapsedMs": 101,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "errorCode": "internal",
+        "errorMessage": "API request failed: 401 Unauthorized",
+        "intentRestated": "unable to process query"
+      }
+    },
+    {
+      "id": "06-slow-async-query",
+      "expectedTool": "lolly_query",
+      "toolUsed": "lolly_query",
+      "toolMatch": true,
+      "status": "error",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 100,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "errorCode": "internal",
+        "errorMessage": "API request failed: 401 Unauthorized",
+        "intentRestated": "unable to process query"
+      }
+    },
+    {
+      "id": "07-approval-required",
+      "expectedTool": "lolly_query",
+      "toolUsed": "lolly_query",
+      "toolMatch": true,
+      "status": "refused",
+      "envelopeValid": true,
+      "driftCaught": true,
+      "driftDetails": [
+        "bridge-guard-fired: status=refused, elapsed_ms=0, reason=Refused: question names destructive verb 'delete' applied to NetSuite entity 'bi"
+      ],
+      "elapsedMs": 1,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "intentRestated": "Delete all overdue vendor bills from last quarter."
+      }
+    },
+    {
+      "id": "07b-archive-soft-phrasing",
+      "expectedTool": "lolly_query",
+      "toolUsed": "lolly_query",
+      "toolMatch": true,
+      "status": "error",
+      "envelopeValid": true,
+      "driftCaught": true,
+      "driftDetails": [
+        "no-false-positive: status=error, elapsed_ms=5"
+      ],
+      "elapsedMs": 101,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "errorCode": "internal",
+        "errorMessage": "API request failed: 401 Unauthorized",
+        "intentRestated": "unable to process query"
+      }
+    },
+    {
+      "id": "08-suiteql-read",
+      "expectedTool": "lolly_executeSuiteQL",
+      "toolUsed": "lolly_executeSuiteQL",
+      "toolMatch": true,
+      "status": "error",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 3,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "errorCode": "internal",
+        "errorMessage": "API request failed: 401 Unauthorized",
+        "intentRestated": "Execute SuiteQL: judge-loop scenario 08: smoke-test read-only SuiteQL path"
+      }
+    },
+    {
+      "id": "09-suiteql-write-blocked",
+      "expectedTool": "lolly_executeSuiteQL",
+      "toolUsed": "lolly_executeSuiteQL",
+      "toolMatch": true,
+      "status": "refused",
+      "envelopeValid": true,
+      "driftCaught": true,
+      "driftDetails": [
+        "write-guard-fired: refused in 0ms (no gateway call)"
+      ],
+      "elapsedMs": 0,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "sandbox",
+        "intentRestated": "Execute SuiteQL: judge-loop scenario 09: write-verb guard smoke test"
+      }
+    },
+    {
+      "id": "10-cross-env-drift",
+      "expectedTool": "lolly_query",
+      "toolUsed": "lolly_query",
+      "toolMatch": true,
+      "status": "error",
+      "envelopeValid": true,
+      "driftCaught": false,
+      "driftDetails": [],
+      "elapsedMs": 102,
+      "envelopeParseMs": 0,
+      "envelopeSummary": {
+        "confidence": "low",
+        "envUsed": "production",
+        "errorCode": "internal",
+        "errorMessage": "API request failed: 401 Unauthorized",
+        "intentRestated": "unable to process query"
+      }
+    }
+  ]
+}

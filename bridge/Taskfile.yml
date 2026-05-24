@@ -1,0 +1,139 @@
+version: '3'
+
+vars:
+  IMAGE_NAME: openclaw-mcp
+  DOCKER_COMPOSE: docker compose
+
+tasks:
+  # ── Development ──────────────────────────────────────────────────────
+
+  dev:
+    desc: Start dev server with watch mode
+    cmd: npx tsx watch src/index.ts
+
+  # ── Quality ──────────────────────────────────────────────────────────
+
+  lint:
+    desc: Run ESLint
+    cmd: npx eslint src --ext .ts
+
+  lint:fix:
+    desc: Run ESLint with auto-fix
+    cmd: npx eslint src --ext .ts --fix
+
+  format:
+    desc: Format code with Prettier
+    cmd: npx prettier --write "src/**/*.ts"
+
+  format:check:
+    desc: Check code formatting
+    cmd: npx prettier --check "src/**/*.ts"
+
+  typecheck:
+    desc: Run TypeScript type checking
+    cmd: npx tsc --noEmit
+
+  test:
+    desc: Run tests in watch mode
+    cmd: npx vitest
+
+  test:run:
+    desc: Run tests once
+    cmd: npx vitest run
+
+  # ── Build ────────────────────────────────────────────────────────────
+
+  build:
+    desc: Production build
+    deps: [clean]
+    cmd: npx tsup
+
+  clean:
+    desc: Remove dist directory
+    cmd: rm -rf dist
+
+  # ── Pipelines ────────────────────────────────────────────────────────
+
+  check:
+    desc: Lint + typecheck
+    cmds:
+      - task: lint:fix
+      - task: typecheck
+
+  ci:
+    desc: Full CI pipeline (lint, typecheck, test, build)
+    cmds:
+      - task: lint
+      - task: format:check
+      - task: typecheck
+      - task: test:run
+      - task: build
+
+  check:all:
+    desc: Full validation pipeline (same as npm run check:all)
+    cmds:
+      - task: lint:fix
+      - task: typecheck
+      - task: test:run
+      - task: build
+
+  # ── MCP Inspector ────────────────────────────────────────────────
+
+  inspector:
+    desc: Launch MCP Inspector (connects to local MCP server via stdio)
+    cmd: npx @modelcontextprotocol/inspector node dist/index.js
+
+  inspector:sse:
+    desc: Launch MCP Inspector (connects to SSE server)
+    cmd: npx @modelcontextprotocol/inspector --transport sse --server-url http://localhost:${PORT:-3000}/sse
+
+  mcp:dev:
+    desc: Start MCP server in SSE mode (dev)
+    cmd: npx tsx src/index.ts --transport sse
+    env:
+      OPENCLAW_URL: http://127.0.0.1:18789
+      OPENCLAW_GATEWAY_TOKEN: '{{.OPENCLAW_GATEWAY_TOKEN}}'
+      OAUTH_ENABLED: 'false'
+      DEBUG: 'true'
+
+  # ── Docker ───────────────────────────────────────────────────────────
+
+  docker:build:
+    desc: Build Docker image
+    cmd: docker build -t {{.IMAGE_NAME}} .
+
+  docker:up:
+    desc: Start all services
+    cmd: '{{.DOCKER_COMPOSE}} up -d'
+
+  docker:down:
+    desc: Stop all services
+    cmd: '{{.DOCKER_COMPOSE}} down'
+
+  docker:logs:
+    desc: Follow container logs
+    cmd: '{{.DOCKER_COMPOSE}} logs -f'
+
+  docker:restart:
+    desc: Restart all services
+    cmds:
+      - task: docker:down
+      - task: docker:up
+
+  docker:ps:
+    desc: Show running containers
+    cmd: '{{.DOCKER_COMPOSE}} ps'
+
+  # ── Setup ────────────────────────────────────────────────────────────
+
+  setup:
+    desc: Initial project setup
+    cmds:
+      - npm ci --no-audit --no-fund
+      - cmd: cp -n .env.example .env 2>/dev/null || true
+        silent: true
+      - echo "Done. Edit .env with your settings."
+
+  setup:env:
+    desc: Generate a random API key for .env
+    cmd: 'echo "MCP_API_KEYS=$(openssl rand -hex 32)"'

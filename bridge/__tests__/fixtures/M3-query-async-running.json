@@ -1,0 +1,20 @@
+{
+  "_synthesized": true,
+  "status": "running",
+  "intent_restated": "how many vendor records exist in production?",
+  "assumptions": [],
+  "unanswered": [],
+  "data": {
+    "shape": "scalar",
+    "value": "task_01JXYZABC123DEADLINE5S",
+    "rendered_markdown": "{\"task_id\":\"task_01JXYZABC123DEADLINE5S\",\"deadline_exceeded_ms\":5000}"
+  },
+  "sources": [],
+  "confidence": "low",
+  "confidence_reason": "Task still running — poll with lolly_task_status using data.value.task_id",
+  "task_id": "task_01JXYZABC123DEADLINE5S",
+  "elapsed_ms": 5003,
+  "env_used": "production",
+  "bridge_version": "redacted",
+  "lolly_session_id": "redacted"
+}
