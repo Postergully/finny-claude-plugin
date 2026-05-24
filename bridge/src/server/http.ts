@@ -196,8 +196,11 @@ export async function createHttpServer(
       });
     });
 
-    // Bearer auth middleware for protected routes
-    authMiddleware = requireBearerAuth({ verifier: provider });
+    // Bearer auth middleware for protected routes.
+    // resourceMetadataUrl is included in WWW-Authenticate per RFC 9728 so
+    // clients (Claude.ai, Inspector) can discover the OAuth server from a 401.
+    const resourceMetadataUrl = `${issuerUrl.toString().replace(/\/$/, '')}/.well-known/oauth-protected-resource/mcp`;
+    authMiddleware = requireBearerAuth({ verifier: provider, resourceMetadataUrl });
   }
 
   // --- Health check (no auth) ---
