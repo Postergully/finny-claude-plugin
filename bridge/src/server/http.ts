@@ -247,8 +247,14 @@ export async function createHttpServer(
     }
 
     // New session (initialization request)
+    const allowedHosts = (process.env.MCP_ALLOWED_HOSTS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
+      enableDnsRebindingProtection: allowedHosts.length > 0,
+      allowedHosts: allowedHosts.length > 0 ? allowedHosts : undefined,
       onsessioninitialized: (newSessionId) => {
         streamableSessions.set(newSessionId, { transport, server });
         log(`Streamable session initialized: ${newSessionId}`);
