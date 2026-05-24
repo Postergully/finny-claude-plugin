@@ -1,4 +1,4 @@
-// Registry of named reports for `lolly_report`. Each entry encodes the
+// Registry of named reports for `finny_report`. Each entry encodes the
 // ShareChat/NetSuite rules from /Applications/nanoclaw/CLAUDE.md "NetSuite Rules"
 // directly in its preamble so report behavior is portable even if the
 // workspace MEMORY.md drifts. Workspace rules still enforce at runtime;
@@ -12,7 +12,7 @@ export type ExpectedShape = 'scalar' | 'rows' | 'narrative' | 'mixed';
 
 export interface ReportDef {
   /**
-   * Build the natural-language question sent to Lolly. `params` is the
+   * Build the natural-language question sent to Finny. `params` is the
    * caller-supplied params merged with an `env` key (the resolved env).
    */
   preamble: (params: Record<string, string>) => string;

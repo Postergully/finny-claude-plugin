@@ -4,8 +4,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/freema/openclaw-mcp
-cd openclaw-mcp
+git clone https://github.com/freema/hermes-mcp
+cd hermes-mcp
 
 # Install dependencies
 npm install
@@ -47,7 +47,7 @@ src/
 ├── config/         # Constants and configuration
 ├── mcp/
 │   └── tools/      # MCP tool implementations
-├── openclaw/       # OpenClaw API client
+├── hermes/       # Hermes API client
 ├── server/         # SSE server (for remote access)
 ├── utils/          # Logging, errors, helpers
 ├── cli.ts          # CLI argument parsing
@@ -60,11 +60,11 @@ src/
 
 ```typescript
 // src/mcp/tools/my-tool.ts
-import { OpenClawClient } from '../../openclaw/client.js';
+import { HermesClient } from '../../hermes/client.js';
 import { successResponse, errorResponse } from '../../utils/response-helpers.js';
 
 export const myToolDefinition = {
-  name: 'openclaw_my_tool',
+  name: 'hermes_my_tool',
   description: 'Description of what this tool does',
   inputSchema: {
     type: 'object' as const,
@@ -75,7 +75,7 @@ export const myToolDefinition = {
   },
 };
 
-export async function handleMyTool(client: OpenClawClient, input: unknown) {
+export async function handleMyTool(client: HermesClient, input: unknown) {
   // Implementation
   return successResponse('Result');
 }

@@ -1,8 +1,8 @@
-import { OpenClawConnectionError, OpenClawApiError } from '../utils/errors.js';
+import { HermesConnectionError, HermesApiError } from '../utils/errors.js';
 import { logDebug, isDebugEnabled } from '../utils/logger.js';
 import type {
-  OpenClawHealthResponse,
-  OpenClawChatResponse,
+  HermesHealthResponse,
+  HermesChatResponse,
   OpenAIChatCompletionResponse,
 } from './types.js';
 
@@ -11,15 +11,15 @@ const MAX_RESPONSE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 const MAX_DEBUG_BODY_LENGTH = 4096;
 
 /**
- * Pluggable token source. Default reads process.env.OPENCLAW_GATEWAY_TOKEN.
+ * Pluggable token source. Default reads process.env.FINNY_UPSTREAM_TOKEN.
  * Production deployments can wire this to read from a mounted secret file
- * (e.g. /var/lib/lolly/secrets/gateway-token) without changing the client.
+ * (e.g. /var/lib/finny/secrets/gateway-token) without changing the client.
  */
 export type TokenProvider = () => string | undefined;
 
-const defaultTokenProvider: TokenProvider = () => process.env.OPENCLAW_GATEWAY_TOKEN;
+const defaultTokenProvider: TokenProvider = () => process.env.FINNY_UPSTREAM_TOKEN;
 
-export class OpenClawClient {
+export class HermesClient {
   private baseUrl: string;
   private gatewayToken: string | undefined;
   private timeoutMs: number;
@@ -30,7 +30,7 @@ export class OpenClawClient {
     baseUrl: string,
     gatewayToken?: string,
     timeoutMs: number = DEFAULT_TIMEOUT_MS,
-    model: string = 'openclaw',
+    model: string = 'hermes',
     tokenProvider?: TokenProvider
   ) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
@@ -65,7 +65,7 @@ export class OpenClawClient {
    * We retry exactly once — no exponential storms (see findings doc F16).
    *
    * Token refresh: invokes the configured tokenProvider (default: re-read
-   * process.env.OPENCLAW_GATEWAY_TOKEN). Production wires this to a file-
+   * process.env.FINNY_UPSTREAM_TOKEN). Production wires this to a file-
    * backed provider so rotated gateway tokens are picked up without restart.
    *
    * Known limits (deliberately deferred — track as P1 follow-ups):
@@ -149,7 +149,7 @@ export class OpenClawClient {
             }
           }
         }
-        throw new OpenClawApiError(
+        throw new HermesApiError(
           `API request failed: ${response.status} ${response.statusText}`,
           response.status
         );
@@ -160,26 +160,26 @@ export class OpenClawClient {
       // Validate response size before consuming the body
       const contentLength = response.headers.get('content-length');
       if (contentLength && parseInt(contentLength, 10) > MAX_RESPONSE_SIZE_BYTES) {
-        throw new OpenClawApiError('Response exceeds maximum allowed size (10MB)', 413);
+        throw new HermesApiError('Response exceeds maximum allowed size (10MB)', 413);
       }
 
       const text = await response.text();
       if (text.length > MAX_RESPONSE_SIZE_BYTES) {
-        throw new OpenClawApiError('Response exceeds maximum allowed size (10MB)', 413);
+        throw new HermesApiError('Response exceeds maximum allowed size (10MB)', 413);
       }
 
       return JSON.parse(text) as T;
     } catch (error) {
-      if (error instanceof OpenClawApiError) {
+      if (error instanceof HermesApiError) {
         throw error;
       }
       if (error instanceof DOMException && error.name === 'AbortError') {
-        throw new OpenClawConnectionError(
-          `Request to OpenClaw timed out after ${this.timeoutMs}ms`
+        throw new HermesConnectionError(
+          `Request to Hermes timed out after ${this.timeoutMs}ms`
         );
       }
-      throw new OpenClawConnectionError(
-        `Failed to connect to OpenClaw at ${this.baseUrl}: ${error instanceof Error ? error.message : 'Unknown error'}`
+      throw new HermesConnectionError(
+        `Failed to connect to Hermes at ${this.baseUrl}: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     } finally {
       clearTimeout(timeout);
@@ -241,7 +241,7 @@ export class OpenClawClient {
    * A successful response also means healthy.
    * Connection errors mean the gateway is down.
    */
-  async health(): Promise<OpenClawHealthResponse> {
+  async health(): Promise<HermesHealthResponse> {
     const url = `${this.baseUrl}/v1/chat/completions`;
 
     const controller = new AbortController();
@@ -266,12 +266,12 @@ export class OpenClawClient {
       return { status: 'error', message: `Gateway error (HTTP ${response.status})` };
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
-        throw new OpenClawConnectionError(
-          `Request to OpenClaw timed out after ${this.timeoutMs}ms`
+        throw new HermesConnectionError(
+          `Request to Hermes timed out after ${this.timeoutMs}ms`
         );
       }
-      throw new OpenClawConnectionError(
-        `Failed to connect to OpenClaw at ${this.baseUrl}: ${error instanceof Error ? error.message : 'Unknown error'}`
+      throw new HermesConnectionError(
+        `Failed to connect to Hermes at ${this.baseUrl}: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     } finally {
       clearTimeout(timeout);
@@ -281,7 +281,7 @@ export class OpenClawClient {
   /**
    * Send a chat message via the OpenAI-compatible /v1/chat/completions endpoint.
    */
-  async chat(message: string, sessionId?: string): Promise<OpenClawChatResponse> {
+  async chat(message: string, sessionId?: string): Promise<HermesChatResponse> {
     const body: Record<string, unknown> = {
       model: this.model,
       messages: [{ role: 'user', content: message }],
@@ -294,7 +294,7 @@ export class OpenClawClient {
 
     const headers: Record<string, string> = {};
     if (sessionId) {
-      headers['x-openclaw-session-key'] = sessionId;
+      headers['x-hermes-session-key'] = sessionId;
     }
 
     const completion = await this.request<OpenAIChatCompletionResponse>('/v1/chat/completions', {

@@ -1,7 +1,7 @@
-# OpenClaw MCP Server
+# Hermes MCP Server
 
 ## Project Overview
-OpenClaw MCP (Model Context Protocol) server provides a bridge between Claude (Desktop & Claude.ai) and the OpenClaw AI assistant. It implements the MCP specification to expose OpenClaw capabilities as tools that Claude can invoke.
+Hermes MCP (Model Context Protocol) server provides a bridge between Claude (Desktop & Claude.ai) and the Hermes AI assistant. It implements the MCP specification to expose Hermes capabilities as tools that Claude can invoke.
 
 ## Security Policy (CRITICAL)
 This is a **security-critical** MCP server. Follow these rules:
@@ -32,14 +32,14 @@ This is a **security-critical** MCP server. Follow these rules:
 ```
 Claude Desktop/Claude.ai
     ↕ (MCP Protocol - stdio or SSE)
-OpenClaw MCP Server (this project)
+Hermes MCP Server (this project)
     ↕ (OpenAI-compatible REST API: POST /v1/chat/completions)
-OpenClaw Gateway (http://localhost:18789)
+Hermes Gateway (http://localhost:18789)
 ```
 
 ### Gateway API
-The OpenClaw gateway exposes an **OpenAI-compatible** endpoint at `POST /v1/chat/completions`.
-Authentication uses a Bearer token (`OPENCLAW_GATEWAY_TOKEN`).
+The Hermes gateway exposes an **OpenAI-compatible** endpoint at `POST /v1/chat/completions`.
+Authentication uses a Bearer token (`FINNY_UPSTREAM_TOKEN`).
 
 ### Transports
 - **stdio** - For local Claude Desktop integration (default)
@@ -48,12 +48,12 @@ Authentication uses a Bearer token (`OPENCLAW_GATEWAY_TOKEN`).
 ### Tools
 | Tool | Type | Description |
 |------|------|-------------|
-| openclaw_chat | sync | Send message to OpenClaw |
-| openclaw_status | sync | Health check |
-| openclaw_chat_async | async | Queue message, get task_id |
-| openclaw_task_status | async | Check task progress |
-| openclaw_task_list | async | List all tasks |
-| openclaw_task_cancel | async | Cancel pending task |
+| hermes_chat | sync | Send message to Hermes |
+| hermes_status | sync | Health check |
+| hermes_chat_async | async | Queue message, get task_id |
+| hermes_task_status | async | Check task progress |
+| hermes_task_list | async | List all tasks |
+| hermes_task_cancel | async | Cancel pending task |
 
 ## Development
 
@@ -86,8 +86,8 @@ src/
 ├── config/constants.ts   # Server constants
 ├── mcp/tools/            # MCP tool definitions & handlers
 ├── mcp/tasks/            # Async task manager
-├── openclaw/client.ts    # OpenClaw API client (OpenAI-compatible)
-├── openclaw/types.ts     # TypeScript type definitions
+├── hermes/client.ts    # Hermes API client (OpenAI-compatible)
+├── hermes/types.ts     # TypeScript type definitions
 ├── server/sse.ts         # SSE transport (remote access)
 └── utils/                # Logger, errors, response helpers
 ```
@@ -96,7 +96,7 @@ src/
 - ESM imports with .js extensions (required for ESM compatibility)
 - Underscore prefix for unused variables (_var)
 - Single quotes, semicolons, 2-space indent, 100 char width
-- Custom error classes extend OpenClawError
+- Custom error classes extend HermesError
 - All async operations use async/await (no raw promises)
 
 ## Docker Deployment (Required for Production)

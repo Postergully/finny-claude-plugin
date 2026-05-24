@@ -1,31 +1,31 @@
-# OpenClaw Plugin for Claude Code
+# Hermes Plugin for Claude Code
 
-Connect Claude Code to your OpenClaw AI assistant instance. Chat, check status, and delegate tasks.
+Connect Claude Code to your Hermes AI assistant instance. Chat, check status, and delegate tasks.
 
 ## What's Included
 
-- **MCP Server** - Connects Claude Code to OpenClaw gateway
-- **Skills** - Auto-triggers for OpenClaw interactions
+- **MCP Server** - Connects Claude Code to Hermes gateway
+- **Skills** - Auto-triggers for Hermes interactions
 - **Agents** - `task-delegator` for async task management
 - **Commands** - `/claw:chat`, `/claw:status`
 
 ## Installation
 
 ```bash
-claude plugin install openclaw
+claude plugin install hermes
 ```
 
 **Required environment variables:**
 ```
-OPENCLAW_URL=http://127.0.0.1:18789
-OPENCLAW_GATEWAY_TOKEN=your-gateway-token
+FINNY_UPSTREAM_URL=http://127.0.0.1:8642
+FINNY_UPSTREAM_TOKEN=your-gateway-token
 ```
 
 ## Commands
 
 ### /claw:chat
 
-Send a message to OpenClaw:
+Send a message to Hermes:
 
 ```
 /claw:chat What's the weather like?
@@ -33,7 +33,7 @@ Send a message to OpenClaw:
 
 ### /claw:status
 
-Check OpenClaw gateway health:
+Check Hermes gateway health:
 
 ```
 /claw:status
@@ -53,14 +53,14 @@ spawn task-delegator to monitor my inbox for the next hour
 For long operations, use async mode:
 
 ```
-openclaw_chat_async message="Complex research task..."
+hermes_chat_async message="Complex research task..."
 → Returns task_id
 
-openclaw_task_status task_id="..."
+hermes_task_status task_id="..."
 → Check progress
 ```
 
 ## Links
 
-- [Repository](https://github.com/freema/openclaw-mcp)
-- [OpenClaw](https://github.com/openclaw/openclaw)
+- [Repository](https://github.com/freema/hermes-mcp)
+- [Hermes](https://github.com/hermes/hermes)

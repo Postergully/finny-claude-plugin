@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LollyEnvelopeSchema, type LollyEnvelope } from '../../../types/envelope.js';
+import { FinnyEnvelopeSchema, type FinnyEnvelope } from '../../../types/envelope.js';
 
-// ─── Two-phase lolly_query tests (Track E) ──────────────────────────
+// ─── Two-phase finny_query tests (Track E) ──────────────────────────
 //
 // Two layers of mocking, depending on what we're asserting:
 //
@@ -9,20 +9,20 @@ import { LollyEnvelopeSchema, type LollyEnvelope } from '../../../types/envelope
 //    scope rejects, phase routing, params plumbing). These assertions don't
 //    need the chat pipeline.
 //
-// 2. The gateway `OpenClawClient.chat` is mocked when we want to assert
-//    that the SYSTEM PROMPT Lolly receives carries the right content for
+// 2. The gateway `HermesClient.chat` is mocked when we want to assert
+//    that the SYSTEM PROMPT Finny receives carries the right content for
 //    the requested phase. This is a separate test file (chatPipeline.test.ts
 //    extension below) so we don't have to choose between runQuery-mock and
 //    chat-mock in one file.
 
-const runQueryMock = vi.hoisted(() => vi.fn<(...args: unknown[]) => Promise<LollyEnvelope>>());
+const runQueryMock = vi.hoisted(() => vi.fn<(...args: unknown[]) => Promise<FinnyEnvelope>>());
 vi.mock('../../../mcp/tools/_shared/chatPipeline.js', () => ({
   runQuery: runQueryMock,
 }));
 
 const { queryTool } = await import('../../../mcp/tools/query.js');
 
-function makeOkRows(): LollyEnvelope {
+function makeOkRows(): FinnyEnvelope {
   return {
     status: 'ok',
     intent_restated: 'mocked',
@@ -39,11 +39,11 @@ function makeOkRows(): LollyEnvelope {
     elapsed_ms: 1,
     env_used: 'production',
     bridge_version: '0.0.1',
-    lolly_session_id: 'sess',
+    finny_session_id: 'sess',
   };
 }
 
-function makeOkNarrative(): LollyEnvelope {
+function makeOkNarrative(): FinnyEnvelope {
   return {
     status: 'ok',
     intent_restated: 'discovery for p&l_statement',
@@ -56,7 +56,7 @@ function makeOkNarrative(): LollyEnvelope {
     elapsed_ms: 1,
     env_used: 'production',
     bridge_version: '0.0.1',
-    lolly_session_id: 'sess',
+    finny_session_id: 'sess',
   };
 }
 
@@ -88,7 +88,7 @@ describe('Track E — bless-list scope enforcement on execute phase', () => {
 
     // Critical: no gateway call was made.
     expect(runQueryMock).not.toHaveBeenCalled();
-    expect(LollyEnvelopeSchema.safeParse(res).success).toBe(true);
+    expect(FinnyEnvelopeSchema.safeParse(res).success).toBe(true);
   });
 
   it('blessed intent + execute + partial scope → wrong_tool naming only the missing vars', async () => {

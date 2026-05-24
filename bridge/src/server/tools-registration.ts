@@ -17,13 +17,13 @@ import {
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { ZodTypeAny } from 'zod';
 
-import type { InstanceRegistry } from '../openclaw/registry.js';
+import type { InstanceRegistry } from '../hermes/registry.js';
 import { SERVER_ICON_SVG_BASE64 } from '../config/constants.js';
 import { log, logError } from '../utils/logger.js';
 import * as tools from '../mcp/tools/index.js';
 import { PROMPT_REGISTRY } from '../mcp/prompts/registry.js';
 import { recordEnvelopeForLog, summarizeEnvelopeForLog } from './accessLog.js';
-import type { LollyEnvelope } from '../types/envelope.js';
+import type { FinnyEnvelope } from '../types/envelope.js';
 
 export interface ToolRegistrationDeps {
   registry: InstanceRegistry;
@@ -38,8 +38,8 @@ export interface ToolRegistrationDeps {
 // executeSuiteQLTool is INTENTIONALLY excluded from the MCP tool surface.
 // It is kept as an internal module (used by future supervised paths and
 // covered by unit tests in src/__tests__/mcp/tools/executeSuiteQL.test.ts)
-// but cowork should never invoke it — Lolly authors SuiteQL via her own
-// netsuite skill scripts. See docs/LOLLY-AS-PLUGIN-DESIGN.md M4.1 carry-forward.
+// but cowork should never invoke it — Finny authors SuiteQL via her own
+// netsuite skill scripts. See docs/FINNY-AS-PLUGIN-DESIGN.md M4.1 carry-forward.
 const ALL_TOOLS = [
   tools.queryTool,
   tools.reportTool,
@@ -57,7 +57,7 @@ export const toolHandlers = new Map<string, HandlerFn>(
     const fn: HandlerFn = async (input: unknown) => {
       const parsed = (t.inputSchema as ZodTypeAny).parse(input);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const envelope = (await (t.handler as (p: any) => Promise<unknown>)(parsed)) as LollyEnvelope;
+      const envelope = (await (t.handler as (p: any) => Promise<unknown>)(parsed)) as FinnyEnvelope;
       // Record envelope shape for the per-request access log line. No-op
       // in stdio mode (no AsyncLocalStorage context set there).
       try {
@@ -121,7 +121,7 @@ export function createMcpServer(deps: ToolRegistrationDeps): Server {
 
 /**
  * Register MCP prompts handlers. Prompts serve plugin skill bodies
- * (lolly_usage, lolly_judging) to any harness connecting to the bridge.
+ * (finny_usage, finny_judging) to any harness connecting to the bridge.
  */
 export function registerPrompts(server: Server): void {
   server.setRequestHandler(ListPromptsRequestSchema, async () => ({
@@ -171,7 +171,7 @@ export async function getPrompt(name: string, args: Record<string, string> = {})
 }
 
 /**
- * Register all OpenClaw tools on an existing MCP Server instance.
+ * Register all Hermes tools on an existing MCP Server instance.
  */
 function registerTools(server: Server, _deps: ToolRegistrationDeps): void {
   server.setRequestHandler(ListToolsRequestSchema, async () => {

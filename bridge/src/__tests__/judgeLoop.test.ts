@@ -6,7 +6,7 @@
  * asserts top-level envelope shape + drift checks, and emits a summary JSON
  * for the M3.5 decision gate.
  *
- * Gated on LOLLY_LIVE_JUDGE_LOOP=1. Default: skip whole file.
+ * Gated on FINNY_LIVE_JUDGE_LOOP=1. Default: skip whole file.
  *
  * Three summary metrics (per plan):
  *   1. Drift-caught rate
@@ -23,9 +23,9 @@ import { queryTool } from '../mcp/tools/query.js';
 import { reportTool } from '../mcp/tools/report.js';
 import { executeSuiteQLTool } from '../mcp/tools/executeSuiteQL.js';
 import { taskStatusTool } from '../mcp/tools/taskStatus.js';
-import { LollyEnvelopeSchema, type LollyEnvelope } from '../types/envelope.js';
+import { FinnyEnvelopeSchema, type FinnyEnvelope } from '../types/envelope.js';
 
-const LIVE = process.env.LOLLY_LIVE_JUDGE_LOOP === '1';
+const LIVE = process.env.FINNY_LIVE_JUDGE_LOOP === '1';
 
 // Resolve scenario dir relative to this test file (src/__tests__/...)
 const __filename = fileURLToPath(import.meta.url);
@@ -37,7 +37,7 @@ interface ParsedScenario {
   id: string;
   file: string;
   question: string;
-  expectedTool: 'lolly_query' | 'lolly_report' | 'lolly_executeSuiteQL' | 'lolly_task_status';
+  expectedTool: 'finny_query' | 'finny_report' | 'finny_executeSuiteQL' | 'finny_task_status';
   toolInput: Record<string, unknown>;
   // Drift variants listed in the md for record-keeping
   driftVariants: string[];
@@ -83,7 +83,7 @@ function parseScenario(filePath: string): ParsedScenario {
     .trim();
 
   const expectedToolRaw = section('Expected tool');
-  const toolMatch = expectedToolRaw.match(/`(lolly_[a-zA-Z]+)`/);
+  const toolMatch = expectedToolRaw.match(/`(finny_[a-zA-Z]+)`/);
   if (!toolMatch) {
     throw new Error(
       `Scenario ${id}: could not parse expected tool from: ${expectedToolRaw.slice(0, 80)}`
@@ -122,14 +122,14 @@ function parseScenario(filePath: string): ParsedScenario {
 /**
  * Drift detector heuristics. We walk through a small catalogue and mark
  * each scenario's envelope as "drift caught" if judge-side logic would
- * flag it. "Caught" here means: either Lolly herself surfaced the issue
+ * flag it. "Caught" here means: either Finny herself surfaced the issue
  * (via unanswered/confidence/assumptions), OR the envelope shape itself
  * is suspicious enough that a real judge skill would flag it.
  */
 function detectDrift(
   scenarioId: string,
   input: Record<string, unknown>,
-  env: LollyEnvelope
+  env: FinnyEnvelope
 ): { caught: boolean; details: string[] } {
   const details: string[] = [];
 
@@ -145,7 +145,7 @@ function detectDrift(
   // Approval-required / write-blocked should surface as refused or other.
   // M3.6: bridge destructive-intent guard now short-circuits before any
   // taskManager.create(), so the expected signal is status=refused with
-  // elapsed_ms=0. Accept either path (bridge guard or Lolly's escape
+  // elapsed_ms=0. Accept either path (bridge guard or Finny's escape
   // valve); distinguish them in the details so the summary is diagnosable.
   if (scenarioId.startsWith('07-approval-required')) {
     const isBridgeGuardRefuse = env.status === 'refused' && env.elapsed_ms === 0;
@@ -242,7 +242,7 @@ function detectDrift(
   }
 
   // For positive-path scenarios, "drift caught" means ANY drift signal fired.
-  // If no drift fired, that's also fine — it means Lolly answered cleanly,
+  // If no drift fired, that's also fine — it means Finny answered cleanly,
   // which counts as success, not a miss. We separate the two in the summary.
   return {
     caught: details.length > 0,
@@ -253,24 +253,24 @@ function detectDrift(
 async function invokeTool(
   toolName: string,
   toolInput: Record<string, unknown>
-): Promise<LollyEnvelope> {
+): Promise<FinnyEnvelope> {
   switch (toolName) {
-    case 'lolly_query':
+    case 'finny_query':
       return queryTool.handler(toolInput as Parameters<typeof queryTool.handler>[0]);
-    case 'lolly_report':
+    case 'finny_report':
       return reportTool.handler(toolInput as Parameters<typeof reportTool.handler>[0]);
-    case 'lolly_executeSuiteQL':
+    case 'finny_executeSuiteQL':
       return executeSuiteQLTool.handler(
         toolInput as Parameters<typeof executeSuiteQLTool.handler>[0]
       );
-    case 'lolly_task_status':
+    case 'finny_task_status':
       return taskStatusTool.handler(toolInput as Parameters<typeof taskStatusTool.handler>[0]);
     default:
       throw new Error(`Unknown tool: ${toolName}`);
   }
 }
 
-function summarizeEnvelope(env: LollyEnvelope): ScenarioResult['envelopeSummary'] {
+function summarizeEnvelope(env: FinnyEnvelope): ScenarioResult['envelopeSummary'] {
   return {
     confidence: env.confidence,
     envUsed: env.env_used,
@@ -328,16 +328,16 @@ describe('judge-loop scenario files (structural)', () => {
   it('has 9 public scenario files', () => {
     // 10 original M3 scenarios + 07b (M3.6 false-positive control) − the 2
     // executeSuiteQL scenarios (08, 09) which moved to _internal/ in M4.1
-    // when lolly_executeSuiteQL was removed from the public MCP surface.
+    // when finny_executeSuiteQL was removed from the public MCP surface.
     expect(scenarios).toHaveLength(9);
   });
 
   it('every scenario has a valid expected tool', () => {
     const validTools = new Set([
-      'lolly_query',
-      'lolly_report',
-      'lolly_executeSuiteQL',
-      'lolly_task_status',
+      'finny_query',
+      'finny_report',
+      'finny_executeSuiteQL',
+      'finny_task_status',
     ]);
     for (const s of scenarios) {
       expect(validTools.has(s.expectedTool)).toBe(true);
@@ -352,17 +352,17 @@ describe('judge-loop scenario files (structural)', () => {
 
   it('covers the public tools across the scenarios', () => {
     const tools = new Set(scenarios.map((s) => s.expectedTool));
-    // lolly_task_status is exercised via the scenario 6 poll path, not a direct
+    // finny_task_status is exercised via the scenario 6 poll path, not a direct
     // scenario; the harness below invokes it, so its absence here is expected.
-    // lolly_executeSuiteQL was removed from the public surface in M4.1; its
+    // finny_executeSuiteQL was removed from the public surface in M4.1; its
     // scenarios live in _internal/ and aren't loaded here.
-    expect(tools.has('lolly_query')).toBe(true);
-    expect(tools.has('lolly_report')).toBe(true);
+    expect(tools.has('finny_query')).toBe(true);
+    expect(tools.has('finny_report')).toBe(true);
   });
 });
 
 // =========================================================================
-// Live harness — gated on LOLLY_LIVE_JUDGE_LOOP=1.
+// Live harness — gated on FINNY_LIVE_JUDGE_LOOP=1.
 // =========================================================================
 
 describe.skipIf(!LIVE)('judge-loop harness (LIVE)', () => {
@@ -396,7 +396,7 @@ describe.skipIf(!LIVE)('judge-loop harness (LIVE)', () => {
         }
 
         const started = Date.now();
-        let env: LollyEnvelope;
+        let env: FinnyEnvelope;
         let errored: string | undefined;
 
         try {
@@ -426,7 +426,7 @@ describe.skipIf(!LIVE)('judge-loop harness (LIVE)', () => {
         // the safeParse time as the "envelope-layer" signal — excludes
         // any gateway correction retries, which happen inside the handler.
         const parseStart = Date.now();
-        const parseResult = LollyEnvelopeSchema.safeParse(env);
+        const parseResult = FinnyEnvelopeSchema.safeParse(env);
         const envelopeParseMs = Date.now() - parseStart;
 
         const drift = detectDrift(scenario.id, scenario.toolInput, env);

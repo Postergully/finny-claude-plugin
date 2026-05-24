@@ -1,12 +1,12 @@
-// Conversation store for needs_input → lolly_continue ask-back loops.
+// Conversation store for needs_input → finny_continue ask-back loops.
 //
-// When execute-phase Lolly returns status: 'needs_input', the bridge
+// When execute-phase Finny returns status: 'needs_input', the bridge
 // generates a conversation_id and stores the original RunQuery context
-// here so cowork can resume via lolly_continue without restarting from
-// scratch. The Lolly LLM session itself is preserved by sessionStore;
+// here so cowork can resume via finny_continue without restarting from
+// scratch. The Finny LLM session itself is preserved by sessionStore;
 // this file holds the *intent + scope + clarifications* context.
 //
-// Capacity 1000 entries, 30-minute idle eviction. Each lolly_continue
+// Capacity 1000 entries, 30-minute idle eviction. Each finny_continue
 // call increments the round counter; the F4 round-cap test asserts the
 // caller-side cap (3) lives in the continue handler, not here.
 //
@@ -23,7 +23,7 @@ const TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 export interface ConversationEntry {
   conversation_id: string;
-  // Original input context, replayed on each lolly_continue call.
+  // Original input context, replayed on each finny_continue call.
   intent_string?: string;
   blessed?: BlessListEntry;
   user_question: string;
@@ -61,7 +61,7 @@ function prune(now: number): void {
 }
 
 // Create a new conversation entry (round 1) and return its id. Called from
-// runQuery when Lolly's first execute response is needs_input.
+// runQuery when Finny's first execute response is needs_input.
 export function createConversation(
   init: Omit<ConversationEntry, 'conversation_id' | 'round' | 'lastUsed'>
 ): string {

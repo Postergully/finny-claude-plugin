@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LollyEnvelopeSchema } from '../../../types/envelope.js';
+import { FinnyEnvelopeSchema } from '../../../types/envelope.js';
 
 // Mock the gateway client — we don't need a real chat round-trip; the
-// remember tool synthesizes its own success envelope after Lolly
+// remember tool synthesizes its own success envelope after Finny
 // acknowledges. The mock just controls success vs failure of that call.
 const chatMock = vi.hoisted(() =>
   vi.fn<(message: string, sessionId?: string) => Promise<{ response: string; model: string }>>()
 );
-vi.mock('../../../openclaw/client.js', () => ({
-  OpenClawClient: vi.fn().mockImplementation(() => ({
+vi.mock('../../../hermes/client.js', () => ({
+  HermesClient: vi.fn().mockImplementation(() => ({
     chat: chatMock,
   })),
 }));
@@ -24,7 +24,7 @@ beforeEach(() => {
   chatMock.mockReset();
 });
 
-describe('lolly_remember — happy path', () => {
+describe('finny_remember — happy path', () => {
   it('valid input → returns ok envelope with data.shape: scalar, value: ok', async () => {
     chatMock.mockResolvedValueOnce({
       response: '```json\n{"status":"ok","data":{"shape":"scalar","value":"ok"}}\n```',
@@ -39,12 +39,12 @@ describe('lolly_remember — happy path', () => {
 
     expect(res.status).toBe('ok');
     expect(res.data).toEqual({ shape: 'scalar', value: 'ok' });
-    expect(LollyEnvelopeSchema.safeParse(res).success).toBe(true);
+    expect(FinnyEnvelopeSchema.safeParse(res).success).toBe(true);
     expect(chatMock).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('lolly_remember — input validation', () => {
+describe('finny_remember — input validation', () => {
   it('content over 8000 chars is rejected by inputSchema', () => {
     const result = rememberInputSchema.safeParse({
       content: 'x'.repeat(8001),
@@ -64,7 +64,7 @@ describe('lolly_remember — input validation', () => {
   });
 });
 
-describe('lolly_remember — gateway error', () => {
+describe('finny_remember — gateway error', () => {
   it('gateway throws → handler returns errorEnvelope with code: internal', async () => {
     chatMock.mockRejectedValueOnce(new Error('gateway boom'));
 
@@ -77,6 +77,6 @@ describe('lolly_remember — gateway error', () => {
     expect(res.status).toBe('error');
     expect(res.error?.code).toBe('internal');
     expect(res.error?.message).toMatch(/gateway boom/);
-    expect(LollyEnvelopeSchema.safeParse(res).success).toBe(true);
+    expect(FinnyEnvelopeSchema.safeParse(res).success).toBe(true);
   });
 });

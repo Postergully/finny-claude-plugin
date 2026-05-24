@@ -1,6 +1,6 @@
 # Internal Scenarios
 
-These scenarios reference `lolly_executeSuiteQL`, which was removed from
+These scenarios reference `finny_executeSuiteQL`, which was removed from
 the public MCP tool surface in M4.1 (2026-05-13). The handler still
 exists in `src/mcp/tools/executeSuiteQL.ts` and is unit-tested at
 `src/__tests__/mcp/tools/executeSuiteQL.test.ts`, but cowork can no longer

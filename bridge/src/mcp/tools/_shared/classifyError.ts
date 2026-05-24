@@ -1,4 +1,4 @@
-// Shared error classifier — maps thrown errors (OpenClawApiError, network
+// Shared error classifier — maps thrown errors (HermesApiError, network
 // errors, timeouts) to the ErrorCodeSchema values the judge-loop branches on.
 // Extracted for reuse across the async chat pipeline + future report /
 // executeSuiteQL handlers.

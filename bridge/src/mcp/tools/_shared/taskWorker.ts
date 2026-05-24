@@ -1,17 +1,17 @@
-// Background task worker + await-helper shared by lolly_query and
-// (future Task 4) lolly_report. Singleton, lazy-started on first call.
+// Background task worker + await-helper shared by finny_query and
+// (future Task 4) finny_report. Singleton, lazy-started on first call.
 //
 // Design notes:
 // - 50ms idle poll is pragmatic — chat tasks are seconds to minutes,
 //   50ms of idle noise is irrelevant. No heavier queue abstraction (YAGNI).
 // - Worker process-lifetime bound; no graceful shutdown needed for M3.
-// - `awaitTaskOrEscalate` is the extracted wait-loop both lolly_query and
-//   lolly_report (Task 4) will call with different deadline policies.
+// - `awaitTaskOrEscalate` is the extracted wait-loop both finny_query and
+//   finny_report (Task 4) will call with different deadline policies.
 
 import { taskManager } from '../../tasks/manager.js';
 import { runQuery, type RunQueryParams } from './chatPipeline.js';
 import { runningEnvelope, errorEnvelope } from './envelopeBuilders.js';
-import type { LollyEnvelope } from '../../../types/envelope.js';
+import type { FinnyEnvelope } from '../../../types/envelope.js';
 import { log } from '../../../utils/logger.js';
 
 let workerRunning = false;
@@ -50,7 +50,7 @@ async function drain(): Promise<void> {
  * the stored envelope (or a mapped error envelope for failed tasks). If the
  * deadline elapses with the task still pending/running, return a
  * `status: 'running'` envelope carrying `data.value.task_id` so cowork can
- * resume via `lolly_task_status`.
+ * resume via `finny_task_status`.
  */
 export async function awaitTaskOrEscalate(
   taskId: string,
@@ -58,7 +58,7 @@ export async function awaitTaskOrEscalate(
   envUsed: 'sandbox' | 'production',
   sessionId: string,
   intentRestated: string
-): Promise<LollyEnvelope> {
+): Promise<FinnyEnvelope> {
   const startWait = Date.now();
   while (Date.now() - startWait < deadlineMs) {
     const t = taskManager.get(taskId);
@@ -75,7 +75,7 @@ export async function awaitTaskOrEscalate(
     }
     if (t.status === 'completed' && t.result) {
       try {
-        return JSON.parse(t.result) as LollyEnvelope;
+        return JSON.parse(t.result) as FinnyEnvelope;
       } catch (err) {
         return errorEnvelope({
           code: 'internal',

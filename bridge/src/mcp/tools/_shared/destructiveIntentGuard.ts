@@ -1,7 +1,7 @@
-// Destructive-intent guard for lolly_query. Analogous to suiteqlGuard but
+// Destructive-intent guard for finny_query. Analogous to suiteqlGuard but
 // for natural-language questions routed through the async chat path.
 //
-// Posture: fail CLOSED. Lolly is a read-only agent against NetSuite; any NL
+// Posture: fail CLOSED. Finny is a read-only agent against NetSuite; any NL
 // question that names a destructive verb applied to NetSuite entities is
 // refused in-bridge before we ever create a taskManager task. The cost of
 // a false positive is a clearer error + the user rephrases; the cost of a

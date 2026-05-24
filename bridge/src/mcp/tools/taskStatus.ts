@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { taskManager } from '../tasks/manager.js';
 import { errorEnvelope, runningEnvelope, refusedEnvelope } from './_shared/envelopeBuilders.js';
-import type { LollyEnvelope } from '../../types/envelope.js';
+import type { FinnyEnvelope } from '../../types/envelope.js';
 
 export const taskStatusInputSchema = z.object({
   task_id: z.string().min(1),
@@ -10,11 +10,11 @@ export const taskStatusInputSchema = z.object({
 export type TaskStatusInput = z.infer<typeof taskStatusInputSchema>;
 
 export const taskStatusTool = {
-  name: 'lolly_task_status' as const,
+  name: 'finny_task_status' as const,
   description:
-    'Poll a running Lolly task (returned by lolly_query or lolly_report when deadline_ms was exceeded). Returns the envelope when done, or running status with elapsed_ms.',
+    'Poll a running Finny task (returned by finny_query or finny_report when deadline_ms was exceeded). Returns the envelope when done, or running status with elapsed_ms.',
   inputSchema: taskStatusInputSchema,
-  handler: async (rawInput: TaskStatusInput): Promise<LollyEnvelope> => {
+  handler: async (rawInput: TaskStatusInput): Promise<FinnyEnvelope> => {
     const input = taskStatusInputSchema.parse(rawInput);
     const task = taskManager.get(input.task_id);
 
@@ -34,7 +34,7 @@ export const taskStatusTool = {
     // the worker already stamped elapsed_ms/env_used/etc. when it wrote the
     // result. Re-stamping here would corrupt timings.
     if (task.status === 'completed' && task.result) {
-      return JSON.parse(task.result) as LollyEnvelope;
+      return JSON.parse(task.result) as FinnyEnvelope;
     }
 
     const createdMs = task.createdAt.getTime();
@@ -71,9 +71,9 @@ export const taskStatusTool = {
       elapsedMs,
       envUsed: 'production',
       sessionId: task.sessionId ?? 'unknown',
-      // Track S: surface latest progress string (set by lolly_progress
+      // Track S: surface latest progress string (set by finny_progress
       // via the bridge dispatcher) so cowork's judging-output skill can
-      // render "Lolly is: <progress>" while we wait.
+      // render "Finny is: <progress>" while we wait.
       progress: task.progress,
     });
   },

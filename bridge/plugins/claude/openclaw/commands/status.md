@@ -1,11 +1,11 @@
 ---
-description: Check OpenClaw gateway health
+description: Check Hermes gateway health
 argument-hint: 
 ---
 
 # /claw:status
 
-Check the health and status of your OpenClaw gateway.
+Check the health and status of your Hermes gateway.
 
 ## Usage
 
@@ -15,4 +15,4 @@ Check the health and status of your OpenClaw gateway.
 
 ## What Happens
 
-Calls `openclaw_status` and returns gateway health info including version, uptime, and active sessions.
+Calls `hermes_status` and returns gateway health info including version, uptime, and active sessions.

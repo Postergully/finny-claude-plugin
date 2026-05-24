@@ -7,11 +7,11 @@ Claude (Desktop / Claude.ai)
     |
     | MCP Protocol (stdio or SSE/Streamable HTTP)
     v
-OpenClaw MCP Server (this project)
+Hermes MCP Server (this project)
     |
     | OpenAI-compatible REST API (POST /v1/chat/completions)
     v
-OpenClaw Gateway (user-controlled)
+Hermes Gateway (user-controlled)
 ```
 
 The MCP server is a **stateless proxy** — it translates MCP tool calls into OpenAI-compatible API requests and returns the response. It does not execute code, access the filesystem, or modify any external state on its own.
@@ -20,20 +20,20 @@ The MCP server is a **stateless proxy** — it translates MCP tool calls into Op
 
 | Tool | Action | Side Effects |
 |------|--------|--------------|
-| `openclaw_chat` | Send a text message to OpenClaw, receive a text response | None — read-only query |
-| `openclaw_status` | Check if the OpenClaw gateway is reachable | None — health check only |
-| `openclaw_chat_async` | Queue a message for async processing, receive a task ID | Creates an in-memory task |
-| `openclaw_task_status` | Check the status of an async task by ID | None — read-only |
-| `openclaw_task_list` | List all async tasks and their statuses | None — read-only |
-| `openclaw_task_cancel` | Cancel a pending async task by ID | Removes an in-memory task |
+| `hermes_chat` | Send a text message to Hermes, receive a text response | None — read-only query |
+| `hermes_status` | Check if the Hermes gateway is reachable | None — health check only |
+| `hermes_chat_async` | Queue a message for async processing, receive a task ID | Creates an in-memory task |
+| `hermes_task_status` | Check the status of an async task by ID | None — read-only |
+| `hermes_task_list` | List all async tasks and their statuses | None — read-only |
+| `hermes_task_cancel` | Cancel a pending async task by ID | Removes an in-memory task |
 
-**Key point:** All tools either read data or send text messages to OpenClaw. The MCP server itself has **no write access** to any filesystem, database, or external service beyond the OpenClaw gateway.
+**Key point:** All tools either read data or send text messages to Hermes. The MCP server itself has **no write access** to any filesystem, database, or external service beyond the Hermes gateway.
 
 ## What Claude Cannot Do
 
 - **Execute shell commands** — the server has no shell execution capability
 - **Read or write files** — no filesystem access (Docker enforces `read_only: true`)
-- **Access the network** — can only reach the configured OpenClaw gateway URL
+- **Access the network** — can only reach the configured Hermes gateway URL
 - **Modify server configuration** — environment variables are set at startup, not changeable at runtime
 - **Bypass authentication** — OAuth tokens are validated per-request when auth is enabled
 - **Access other users' sessions** — sessions are isolated by MCP session ID
@@ -45,28 +45,28 @@ The MCP server is a **stateless proxy** — it translates MCP tool calls into Op
 - **stdio transport (local):** Trusted — communication stays on the local machine. No authentication required.
 - **SSE/HTTP transport (remote):** Untrusted network — requires OAuth 2.1 authentication, HTTPS (via reverse proxy), and CORS restrictions.
 
-### Boundary 2: MCP Server <-> OpenClaw Gateway
+### Boundary 2: MCP Server <-> Hermes Gateway
 
-- The MCP server authenticates to the gateway using a Bearer token (`OPENCLAW_GATEWAY_TOKEN`).
+- The MCP server authenticates to the gateway using a Bearer token (`FINNY_UPSTREAM_TOKEN`).
 - The server validates the gateway URL at startup and blocks requests to private IP ranges (SSRF protection).
 - Responses from the gateway are size-limited (10 MB max) and parsed as JSON — no raw pass-through.
 
 ### Boundary 3: User <-> Claude
 
 - Claude decides which MCP tools to call and with what arguments. The MCP server validates all tool inputs (string length, type, format) but **cannot control Claude's intent**.
-- If OpenClaw can perform actions with real-world consequences (e.g., sending emails, modifying data), those consequences are ultimately triggered by Claude's tool calls through the gateway.
+- If Hermes can perform actions with real-world consequences (e.g., sending emails, modifying data), those consequences are ultimately triggered by Claude's tool calls through the gateway.
 
 ## Attack Surfaces
 
 ### 1. Malicious MCP Tool Input
 
-**Risk:** Crafted tool arguments could exploit the OpenClaw gateway.
+**Risk:** Crafted tool arguments could exploit the Hermes gateway.
 
 **Mitigations:**
 - All tool inputs are validated: type checks, string length limits, control character rejection
 - The MCP server does not interpret message content — it passes validated strings to the gateway
 
-### 2. Compromised OpenClaw Gateway
+### 2. Compromised Hermes Gateway
 
 **Risk:** A compromised gateway could return malicious responses.
 
@@ -90,7 +90,7 @@ The MCP server is a **stateless proxy** — it translates MCP tool calls into Op
 **Risk:** Attacker could trick the server into making requests to internal services.
 
 **Mitigations:**
-- Only one outbound destination: the configured `OPENCLAW_URL`
+- Only one outbound destination: the configured `FINNY_UPSTREAM_URL`
 - Private IP ranges are blocked at the client level
 - URL is set at startup via environment variable, not controllable via tool input
 
@@ -112,5 +112,5 @@ If you expose this server beyond localhost:
 2. **Use HTTPS** — terminate TLS at a reverse proxy (Caddy recommended)
 3. **Restrict CORS** — set `CORS_ORIGINS=https://claude.ai` (or your specific origin)
 4. **Run in Docker** — use the provided `docker-compose.yml` with `read_only` and `no-new-privileges`
-5. **Review gateway permissions** — the MCP server is only as safe as what the OpenClaw gateway allows. If OpenClaw can perform destructive actions, consider adding tool allowlists and human approval on the gateway side
+5. **Review gateway permissions** — the MCP server is only as safe as what the Hermes gateway allows. If Hermes can perform destructive actions, consider adding tool allowlists and human approval on the gateway side
 6. **Monitor logs** — see [Logging](./logging.md) for what gets logged and where

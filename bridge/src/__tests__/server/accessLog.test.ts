@@ -9,7 +9,7 @@ import {
   accessLogMiddleware,
   type AccessLogLine,
 } from '../../server/accessLog.js';
-import type { LollyEnvelope } from '../../types/envelope.js';
+import type { FinnyEnvelope } from '../../types/envelope.js';
 
 describe('formatAccessLogLine — shape discipline', () => {
   it('emits only allow-listed fields, even if input has extras', () => {
@@ -19,10 +19,10 @@ describe('formatAccessLogLine — shape discipline', () => {
       path: '/mcp',
       status: 200,
       duration_ms: 42,
-      tool: 'lolly_query',
+      tool: 'finny_query',
       envelope_status: 'ok' as const,
       envelope_confidence: 'high' as const,
-      lolly_session_id: 'sess-1',
+      finny_session_id: 'sess-1',
       // Stray field simulating a caller accidentally passing a full envelope.
       // Cast to AccessLogLine strips the type, proving formatAccessLogLine
       // filters it at runtime regardless of what the caller passes.
@@ -36,10 +36,10 @@ describe('formatAccessLogLine — shape discipline', () => {
       path: '/mcp',
       status: 200,
       duration_ms: 42,
-      tool: 'lolly_query',
+      tool: 'finny_query',
       envelope_status: 'ok',
       envelope_confidence: 'high',
-      lolly_session_id: 'sess-1',
+      finny_session_id: 'sess-1',
     });
     expect(parsed).not.toHaveProperty('data');
     expect(out).not.toContain('secret vendor');
@@ -56,13 +56,13 @@ describe('formatAccessLogLine — shape discipline', () => {
     const parsed = JSON.parse(out);
     expect(parsed).not.toHaveProperty('tool');
     expect(parsed).not.toHaveProperty('auth_subject');
-    expect(parsed).not.toHaveProperty('lolly_session_id');
+    expect(parsed).not.toHaveProperty('finny_session_id');
   });
 });
 
 describe('summarizeEnvelopeForLog — PII exclusion', () => {
   it('strips data, error.message, intent_restated, assumptions, unanswered, sources', () => {
-    const env: LollyEnvelope = {
+    const env: FinnyEnvelope = {
       status: 'error',
       intent_restated: 'What is the balance for vendor XYZ Corp',
       assumptions: ['vendor XYZ is in production NetSuite'],
@@ -79,15 +79,15 @@ describe('summarizeEnvelopeForLog — PII exclusion', () => {
       elapsed_ms: 42,
       env_used: 'production',
       bridge_version: '0.0.1',
-      lolly_session_id: 'sess-xyz',
+      finny_session_id: 'sess-xyz',
     };
-    const summary = summarizeEnvelopeForLog('lolly_query', env);
+    const summary = summarizeEnvelopeForLog('finny_query', env);
     const json = JSON.stringify(summary);
-    expect(summary.tool).toBe('lolly_query');
+    expect(summary.tool).toBe('finny_query');
     expect(summary.status).toBe('error');
     expect(summary.confidence).toBe('low');
     expect(summary.error_code).toBe('unauthorized');
-    expect(summary.lolly_session_id).toBe('sess-xyz');
+    expect(summary.finny_session_id).toBe('sess-xyz');
     // Verify NONE of the PII-bearing fields leaked through
     expect(json).not.toContain('SECRET_TOKEN_VALUE');
     expect(json).not.toContain('XYZ Corp');
@@ -102,7 +102,7 @@ describe('summarizeEnvelopeForLog — PII exclusion', () => {
   });
 
   it('preserves the bridge-guard refused signal', () => {
-    const env: LollyEnvelope = {
+    const env: FinnyEnvelope = {
       status: 'refused',
       intent_restated: 'Delete all vendor bills',
       assumptions: [],
@@ -114,9 +114,9 @@ describe('summarizeEnvelopeForLog — PII exclusion', () => {
       elapsed_ms: 0,
       env_used: 'production',
       bridge_version: '0.0.1',
-      lolly_session_id: '—',
+      finny_session_id: '—',
     };
-    const summary = summarizeEnvelopeForLog('lolly_query', env);
+    const summary = summarizeEnvelopeForLog('finny_query', env);
     expect(summary.status).toBe('refused');
     expect(summary.confidence).toBe('high');
     expect(summary.error_code).toBeUndefined();
@@ -124,7 +124,7 @@ describe('summarizeEnvelopeForLog — PII exclusion', () => {
 
   // Track G: discover_violation flag detection.
   it('flags discover_violation when confidence_reason carries the bridge marker', () => {
-    const env: LollyEnvelope = {
+    const env: FinnyEnvelope = {
       status: 'ok',
       intent_restated: 'discover with violation',
       assumptions: [],
@@ -137,14 +137,14 @@ describe('summarizeEnvelopeForLog — PII exclusion', () => {
       elapsed_ms: 100,
       env_used: 'production',
       bridge_version: '0.0.1',
-      lolly_session_id: 'sess',
+      finny_session_id: 'sess',
     };
-    const summary = summarizeEnvelopeForLog('lolly_query', env);
+    const summary = summarizeEnvelopeForLog('finny_query', env);
     expect(summary.discover_violation).toBe(true);
   });
 
   it('does not flag discover_violation on clean envelopes', () => {
-    const env: LollyEnvelope = {
+    const env: FinnyEnvelope = {
       status: 'ok',
       intent_restated: 'clean discover',
       assumptions: [],
@@ -156,9 +156,9 @@ describe('summarizeEnvelopeForLog — PII exclusion', () => {
       elapsed_ms: 50,
       env_used: 'production',
       bridge_version: '0.0.1',
-      lolly_session_id: 'sess',
+      finny_session_id: 'sess',
     };
-    const summary = summarizeEnvelopeForLog('lolly_query', env);
+    const summary = summarizeEnvelopeForLog('finny_query', env);
     expect(summary.discover_violation).toBeUndefined();
   });
 
@@ -169,7 +169,7 @@ describe('summarizeEnvelopeForLog — PII exclusion', () => {
       path: '/mcp',
       status: 200,
       duration_ms: 50000,
-      tool: 'lolly_query',
+      tool: 'finny_query',
       envelope_status: 'ok' as const,
       envelope_confidence: 'high' as const,
       discover_violation: true,
@@ -184,7 +184,7 @@ describe('accessLogMiddleware — path filtering + file output', () => {
   let logPath: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lolly-accesslog-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'finny-accesslog-'));
     logPath = path.join(tmpDir, 'access.jsonl');
     process.env.ACCESS_LOG_PATH = logPath;
     resetAccessLogWriter();
@@ -237,10 +237,10 @@ describe('accessLogMiddleware — path filtering + file output', () => {
     // res.locals fallback path (since the AsyncLocalStorage context flows
     // through next(), not available in the middleware-direct test path).
     res.locals.envelopeSummary = {
-      tool: 'lolly_query',
+      tool: 'finny_query',
       status: 'ok',
       confidence: 'high',
-      lolly_session_id: 'sess-1',
+      finny_session_id: 'sess-1',
     };
     const next = vi.fn();
     mw({ method: 'POST', path: '/mcp' } as never, res as never, next);
@@ -254,10 +254,10 @@ describe('accessLogMiddleware — path filtering + file output', () => {
     expect(parsed.method).toBe('POST');
     expect(parsed.path).toBe('/mcp');
     expect(parsed.status).toBe(200);
-    expect(parsed.tool).toBe('lolly_query');
+    expect(parsed.tool).toBe('finny_query');
     expect(parsed.envelope_status).toBe('ok');
     expect(parsed.envelope_confidence).toBe('high');
-    expect(parsed.lolly_session_id).toBe('sess-1');
+    expect(parsed.finny_session_id).toBe('sess-1');
   });
 
   it('logs rejected requests even without envelopeSummary (e.g., 401)', async () => {

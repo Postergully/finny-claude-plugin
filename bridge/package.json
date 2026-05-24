@@ -1,8 +1,8 @@
 {
-  "name": "@postergully/lolly-mcp",
+  "name": "@postergully/finny-mcp",
   "version": "0.4.0",
-  "mcpName": "io.github.freema/openclaw-mcp",
-  "description": "MCP bridge exposing Lolly (OpenClaw ERP agent) as 3 semantic tools with envelope-validated responses.",
+  "mcpName": "io.github.postergully/finny-mcp",
+  "description": "MCP bridge exposing Finny (Hermes ERP agent) as 3 semantic tools with envelope-validated responses.",
   "author": {
     "name": "Postergully"
   },
@@ -11,7 +11,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "lolly-mcp": "./dist/index.js"
+    "finny-mcp": "./dist/index.js"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -32,13 +32,13 @@
     "prepublishOnly": "npm run clean && npm run build",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:judge": "LOLLY_LIVE_JUDGE_LOOP=1 vitest run src/__tests__/judgeLoop.test.ts"
+    "test:judge": "FINNY_LIVE_JUDGE_LOOP=1 vitest run src/__tests__/judgeLoop.test.ts"
   },
   "keywords": [
     "mcp",
-    "openclaw",
+    "hermes-agent",
     "netsuite",
-    "lolly",
+    "finny",
     "claude"
   ],
   "engines": {
@@ -73,10 +73,10 @@
     "LICENSE",
     "plugins"
   ],
-  "homepage": "https://github.com/Postergully/lolly-claude-plugin",
+  "homepage": "https://github.com/Postergully/finny-claude-plugin",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Postergully/lolly-claude-plugin.git"
+    "url": "https://github.com/Postergully/finny-claude-plugin.git"
   },
   "publishConfig": {
     "access": "public"

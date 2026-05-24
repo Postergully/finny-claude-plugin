@@ -33,7 +33,7 @@ jobs:
         run: npm run build
 
       - name: Create archive
-        run: tar -czf openclaw-mcp-${{ github.ref_name }}.tar.gz dist package.json README.md LICENSE
+        run: tar -czf hermes-mcp-${{ github.ref_name }}.tar.gz dist package.json README.md LICENSE
 
       # Docker image build & push to GHCR
       - name: Set up Docker Buildx
@@ -57,8 +57,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/freema/openclaw-mcp:latest
-            ghcr.io/freema/openclaw-mcp:${{ steps.version.outputs.VERSION }}
+            ghcr.io/freema/hermes-mcp:latest
+            ghcr.io/freema/hermes-mcp:${{ steps.version.outputs.VERSION }}
           build-args: |
             VERSION=${{ steps.version.outputs.VERSION }}
           cache-from: type=gha
@@ -67,15 +67,15 @@ jobs:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: openclaw-mcp-${{ github.ref_name }}.tar.gz
+          files: hermes-mcp-${{ github.ref_name }}.tar.gz
           generate_release_notes: true
           body: |
             ## Docker image
 
             ```bash
-            docker pull ghcr.io/freema/openclaw-mcp:${{ steps.version.outputs.VERSION }}
+            docker pull ghcr.io/freema/hermes-mcp:${{ steps.version.outputs.VERSION }}
             ```
 
-            See [deployment docs](https://github.com/freema/openclaw-mcp/blob/main/docs/deployment.md) for full setup instructions.
+            See [deployment docs](https://github.com/freema/hermes-mcp/blob/main/docs/deployment.md) for full setup instructions.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

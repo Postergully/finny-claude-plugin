@@ -4,7 +4,7 @@
 How many vendor records exist in production? (canonical slow query per §10.1)
 
 ## Expected tool
-`lolly_query` with short deadline_ms to force the async path.
+`finny_query` with short deadline_ms to force the async path.
 
 ## Tool input
 ```json
@@ -18,12 +18,12 @@ How many vendor records exist in production? (canonical slow query per §10.1)
 
 ## Expected envelope shape
 - **First call**: `status: 'running'`, `task_id` populated, `data.shape: 'scalar'` (data.value === task_id per builder)
-- **Poll via lolly_task_status**: eventually `status: 'ok' | 'partial'` with scalar count
+- **Poll via finny_task_status**: eventually `status: 'ok' | 'partial'` with scalar count
 
 ## Drift variants
 - **never-running**: query completes in 2s (unlikely but possible) → record as anomaly, not drift
 - **task-id-missing**: `status: 'running'` without task_id → schema validation should have already rejected; if it slips through, judge surfaces
-- **task-not-found-on-poll**: lolly_task_status returns error → infrastructure problem (TTL expired?)
+- **task-not-found-on-poll**: finny_task_status returns error → infrastructure problem (TTL expired?)
 - **poll-returns-different-question**: completed envelope's intent_restated drifts from original question → judge catches
 
 ## Never-reformat checks

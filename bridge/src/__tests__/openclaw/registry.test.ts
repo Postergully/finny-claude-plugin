@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { InstanceRegistry } from '../../openclaw/registry.js';
+import { InstanceRegistry } from '../../hermes/registry.js';
 
 describe('InstanceRegistry', () => {
   const configs = [
@@ -113,7 +113,7 @@ describe('InstanceRegistry', () => {
 
   it('backward-compatible single instance from default env var pattern', () => {
     const registry = new InstanceRegistry([
-      { name: 'default', url: 'http://127.0.0.1:18789', token: 'tok', default: true },
+      { name: 'default', url: 'http://127.0.0.1:8642', token: 'tok', default: true },
     ]);
     expect(registry.size).toBe(1);
     expect(registry.getDefaultName()).toBe('default');

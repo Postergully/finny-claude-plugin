@@ -1,11 +1,11 @@
 ---
-description: Send a message to OpenClaw
+description: Send a message to Hermes
 argument-hint: <message>
 ---
 
 # /claw:chat
 
-Send a message to your OpenClaw assistant and get a response.
+Send a message to your Hermes assistant and get a response.
 
 ## Usage
 
@@ -24,4 +24,4 @@ Send a message to your OpenClaw assistant and get a response.
 
 ## What Happens
 
-Calls `openclaw_chat` (sync) or `openclaw_chat_async` (for long tasks) and returns the response.
+Calls `hermes_chat` (sync) or `hermes_chat_async` (for long tasks) and returns the response.

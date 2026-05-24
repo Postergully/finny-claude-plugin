@@ -4,7 +4,7 @@
 What is the open balance for vendor "Delta"? (assume two vendors share this name)
 
 ## Expected tool
-`lolly_report` — vendor_balance. Expected drift path: Lolly must NOT silently pick one.
+`finny_report` — vendor_balance. Expected drift path: Finny must NOT silently pick one.
 
 ## Tool input
 ```json
@@ -22,8 +22,8 @@ What is the open balance for vendor "Delta"? (assume two vendors share this name
 - OR `assumptions[]` explicitly picks one ID/GSTIN and flags it
 
 ## Drift variants
-- **silent-pick**: Lolly picks one vendor without naming the choice in assumptions → judge MUST catch (confidence high + no disambiguation = drift)
-- **sum-both**: Lolly sums balances across both matches → judge catches via unanswered analysis
+- **silent-pick**: Finny picks one vendor without naming the choice in assumptions → judge MUST catch (confidence high + no disambiguation = drift)
+- **sum-both**: Finny sums balances across both matches → judge catches via unanswered analysis
 - **wrong-one-confident**: picks wrong one with `confidence: 'high'` → intent_restated should name the picked ID
 
 ## Never-reformat checks

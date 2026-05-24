@@ -3,7 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { SERVER_NAME, SERVER_VERSION } from './config/constants.js';
 import { log, logError, setDebugEnabled } from './utils/logger.js';
 import { parseArguments } from './cli.js';
-import { InstanceRegistry } from './openclaw/registry.js';
+import { InstanceRegistry } from './hermes/registry.js';
 import { createMcpServer, type ToolRegistrationDeps } from './server/tools-registration.js';
 import { createHttpServer, type HttpServerConfig } from './server/http.js';
 
@@ -16,7 +16,7 @@ setDebugEnabled(args.debug);
 // Validate model name
 const trimmedModel = args.model.trim();
 if (!trimmedModel) {
-  logError('OPENCLAW_MODEL / --model must be a non-empty string. Default is "openclaw".');
+  logError('FINNY_MODEL / --model must be a non-empty string. Default is "hermes-agent".');
   process.exit(1);
 }
 args.model = trimmedModel;
@@ -123,7 +123,7 @@ async function main() {
     const server = createMcpServer(deps);
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    log('OpenClaw MCP server running on stdio');
+    log('Hermes MCP server running on stdio');
   }
 }
 

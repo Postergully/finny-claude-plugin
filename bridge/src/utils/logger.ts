@@ -21,7 +21,7 @@ function sanitizeLogMessage(message: string): string {
 }
 
 export function log(message: string): void {
-  console.error(`[openclaw-mcp] ${sanitizeLogMessage(message)}`);
+  console.error(`[hermes-mcp] ${sanitizeLogMessage(message)}`);
 }
 
 export function setDebugEnabled(enabled: boolean): void {
@@ -37,17 +37,17 @@ export function logDebug(messageOrFactory: string | (() => string)): void {
     return;
   }
   const message = typeof messageOrFactory === 'function' ? messageOrFactory() : messageOrFactory;
-  console.error(`[openclaw-mcp] DEBUG: ${sanitizeLogMessage(message)}`);
+  console.error(`[hermes-mcp] DEBUG: ${sanitizeLogMessage(message)}`);
 }
 
 export function logError(message: string, error?: unknown): void {
-  console.error(`[openclaw-mcp] ERROR: ${sanitizeLogMessage(message)}`);
+  console.error(`[hermes-mcp] ERROR: ${sanitizeLogMessage(message)}`);
   if (error) {
     // Only log the error message, not the full object (which may contain request/response bodies)
     if (error instanceof Error) {
-      console.error(`[openclaw-mcp] ${sanitizeLogMessage(error.message)}`);
+      console.error(`[hermes-mcp] ${sanitizeLogMessage(error.message)}`);
     } else {
-      console.error('[openclaw-mcp] (non-Error object thrown)');
+      console.error('[hermes-mcp] (non-Error object thrown)');
     }
   }
 }

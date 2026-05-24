@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LollyEnvelopeSchema } from '../../../types/envelope.js';
+import { FinnyEnvelopeSchema } from '../../../types/envelope.js';
 
-// Mock the OpenClawClient constructor + chat() so the happy path doesn't
+// Mock the HermesClient constructor + chat() so the happy path doesn't
 // touch the real gateway. Hoisted so the mock is registered before the
 // module under test is imported.
 const chatMock = vi.hoisted(() =>
   vi.fn<(message: string, sessionId?: string) => Promise<{ response: string; model: string }>>()
 );
-vi.mock('../../../openclaw/client.js', () => ({
-  OpenClawClient: vi.fn().mockImplementation(() => ({
+vi.mock('../../../hermes/client.js', () => ({
+  HermesClient: vi.fn().mockImplementation(() => ({
     chat: chatMock,
   })),
 }));
@@ -36,7 +36,7 @@ const BLOCKED_VERBS = [
   'REPLACE',
 ] as const;
 
-describe('lolly_executeSuiteQL — write-verb guard', () => {
+describe('finny_executeSuiteQL — write-verb guard', () => {
   beforeEach(() => {
     chatMock.mockReset();
     logGatewayMock.mockReset();
@@ -54,7 +54,7 @@ describe('lolly_executeSuiteQL — write-verb guard', () => {
       expect(res.confidence_reason).toContain(verb);
       expect(chatMock).not.toHaveBeenCalled();
       expect(logGatewayMock).not.toHaveBeenCalled();
-      expect(LollyEnvelopeSchema.safeParse(res).success).toBe(true);
+      expect(FinnyEnvelopeSchema.safeParse(res).success).toBe(true);
     });
 
     it(`rejects ${verb.toLowerCase()} (lowercase)`, async () => {
@@ -116,7 +116,7 @@ describe('lolly_executeSuiteQL — write-verb guard', () => {
   });
 });
 
-describe('lolly_executeSuiteQL — happy path + logging', () => {
+describe('finny_executeSuiteQL — happy path + logging', () => {
   beforeEach(() => {
     chatMock.mockReset();
     logGatewayMock.mockReset();
@@ -139,7 +139,7 @@ describe('lolly_executeSuiteQL — happy path + logging', () => {
     };
     chatMock.mockResolvedValueOnce({
       response: '```json\n' + JSON.stringify(rowsEnvelope) + '\n```',
-      model: 'openclaw',
+      model: 'hermes',
     });
 
     const res = await executeSuiteQLTool.handler({
@@ -154,7 +154,7 @@ describe('lolly_executeSuiteQL — happy path + logging', () => {
       expect(res.data.rows).toEqual([[1234]]);
     }
     expect(res.env_used).toBe('production');
-    expect(LollyEnvelopeSchema.safeParse(res).success).toBe(true);
+    expect(FinnyEnvelopeSchema.safeParse(res).success).toBe(true);
 
     // Gateway logger was called with a request-shape record — verify the
     // logged payload does NOT include any rows from data.rows.
@@ -171,7 +171,7 @@ describe('lolly_executeSuiteQL — happy path + logging', () => {
   });
 
   it('client.chat throws → error envelope with classified code, logged with non-200 status', async () => {
-    const boom = Object.assign(new Error('Request to OpenClaw timed out after 60000ms'), {
+    const boom = Object.assign(new Error('Request to Hermes timed out after 60000ms'), {
       status: 0,
     });
     chatMock.mockRejectedValueOnce(boom);
@@ -191,7 +191,7 @@ describe('lolly_executeSuiteQL — happy path + logging', () => {
   it('response without parseable JSON → envelope_parse_failed', async () => {
     chatMock.mockResolvedValueOnce({
       response: 'I cannot structure this as JSON sorry',
-      model: 'openclaw',
+      model: 'hermes',
     });
     const res = await executeSuiteQLTool.handler({
       sql: 'SELECT 1 FROM dual',

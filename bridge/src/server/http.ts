@@ -27,7 +27,7 @@ import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js
 import { mcpAuthRouter } from '@modelcontextprotocol/sdk/server/auth/router.js';
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
 
-import { OpenClawAuthProvider, type AuthProviderConfig } from '../auth/provider.js';
+import { HermesAuthProvider, type AuthProviderConfig } from '../auth/provider.js';
 import { log, logError } from '../utils/logger.js';
 import { createMcpServer, type ToolRegistrationDeps } from './tools-registration.js';
 import { registerReadyRoute } from './ready.js';
@@ -163,7 +163,7 @@ export async function createHttpServer(
   let authMiddleware: ((req: Request, res: Response, next: NextFunction) => void) | undefined;
 
   if (authEnabled) {
-    const provider = new OpenClawAuthProvider(config.authConfig!);
+    const provider = new HermesAuthProvider(config.authConfig!);
     const issuerUrl = config.issuerUrl
       ? new URL(config.issuerUrl)
       : new URL(`http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
@@ -203,8 +203,8 @@ export async function createHttpServer(
   });
 
   // --- Readiness check (no auth) — D7/D11 mitigation ---
-  // Probes openclaw to distinguish "bridge up" from "bridge can reach
-  // openclaw". Wired to ALB target-group health check.
+  // Probes hermes to distinguish "bridge up" from "bridge can reach
+  // hermes". Wired to ALB target-group health check.
   registerReadyRoute(app, deps.registry);
 
   // Helper to conditionally apply auth middleware
@@ -304,7 +304,7 @@ export async function createHttpServer(
 
     log('MCP Endpoints:');
     log('  GET  /health   - Health check (no auth)');
-    log('  GET  /ready    - Deep readiness check (probes openclaw, no auth)');
+    log('  GET  /ready    - Deep readiness check (probes hermes, no auth)');
     log('  ALL  /mcp      - Streamable HTTP (production transport)');
   });
 

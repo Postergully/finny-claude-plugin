@@ -5,7 +5,7 @@ import { lookupIntent } from '../../../../intents/loader.js';
 
 // Track G: discover-phase prompt shape assertions.
 //
-// These tests don't prove Lolly will obey the prompt — that's a runtime
+// These tests don't prove Finny will obey the prompt — that's a runtime
 // behavior question that prompt-shape tests can't answer. What they DO
 // prove: the prompt has the structural properties Track G specifies, so
 // future drift (someone removes "MUST NOT", reorders the prohibition,
@@ -23,7 +23,7 @@ describe('buildQuerySystemPrompt — discover phase shape (Track G)', () => {
       user_question: 'give me P&L',
     });
     // Mode marker arrives in line 1 — before any positive instruction can
-    // mentally commit Lolly to producing live data.
+    // mentally commit Finny to producing live data.
     expect(prompt.slice(0, 400)).toMatch(/DISCOVERY mode/);
     // Capitalized prohibition arrives in line 2 (well within first 400c).
     expect(prompt.slice(0, 400)).toMatch(/MUST NOT/);
@@ -36,7 +36,7 @@ describe('buildQuerySystemPrompt — discover phase shape (Track G)', () => {
       intent_string: 'cash_position',
       blessed: lookupIntent('cash_position')!,
     });
-    // Why-this-matters paragraph is part of the rewrite — gives Lolly a
+    // Why-this-matters paragraph is part of the rewrite — gives Finny a
     // reason, not just a rule. Check for either of the framing phrases.
     expect(prompt).toMatch(/break the chat UX|UX latency|fast brain-only/i);
   });
@@ -82,7 +82,7 @@ describe('buildQuerySystemPrompt — discover phase shape (Track G)', () => {
     // Track G framing: scope_doc is reference, not instructions.
     expect(prompt).toMatch(/For reference ONLY/);
     expect(prompt).toMatch(/Do NOT execute against NetSuite/);
-    // Original scope_doc content still present (Lolly needs it to explain
+    // Original scope_doc content still present (Finny needs it to explain
     // the intent to cowork — she just shouldn't act on it).
     expect(prompt).toMatch(/Profit & loss/);
   });
@@ -118,7 +118,7 @@ describe('buildQuerySystemPrompt — discover phase shape (Track G)', () => {
     });
     expect(prompt).not.toMatch(/DISCOVERY mode/);
     expect(prompt).not.toMatch(/No NetSuite\. No SuiteQL\. No REST\./);
-    // Execute prompt asks Lolly to RUN — opposite of discover.
+    // Execute prompt asks Finny to RUN — opposite of discover.
     expect(prompt).toMatch(/caller wants you to RUN/);
   });
 });

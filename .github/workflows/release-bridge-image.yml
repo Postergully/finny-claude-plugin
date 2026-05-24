@@ -6,8 +6,8 @@ name: Release bridge image
 # and `bridge/package.json`, so the image tag matches both as well.
 #
 # Production EC2 hosts pull this image via systemd unit
-# `lolly-bridge.service` (in nanoclaw repo at infra/host/systemd/) using
-# the `BRIDGE_TAG` env var sourced from `/etc/lolly/tenant.env`.
+# `finny-bridge.service` (in nanoclaw repo at infra/host/systemd/) using
+# the `BRIDGE_TAG` env var sourced from `/etc/finny/tenant.env`.
 #
 # Triggered only on tag push, never on branch push, to keep the registry
 # from filling up with intermediate builds.
@@ -28,7 +28,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: postergully/lolly-mcp
+  IMAGE_NAME: postergully/finny-mcp
 
 jobs:
   build-and-push:

@@ -47,14 +47,14 @@ export interface RememberPromptContext {
   source: 'cowork' | 'manual';
 }
 
-// Track L: lolly_remember system prompt. Tells Lolly to PERSIST the caller's
+// Track L: finny_remember system prompt. Tells Finny to PERSIST the caller's
 // content into her workspace memory rather than answering a NetSuite question.
-// The bridge does not write any files itself — Lolly's existing memory writer
+// The bridge does not write any files itself — Finny's existing memory writer
 // + 11mirror writeback handles persistence on her next sync.
 export function buildRememberSystemPrompt(ctx: RememberPromptContext): string {
   const tagsLine = ctx.tags.length > 0 ? ctx.tags.join(', ') : '(none)';
   return [
-    'You are Lolly. The caller is asking you to PERSIST a synthesis or note into your workspace memory.',
+    'You are Finny. The caller is asking you to PERSIST a synthesis or note into your workspace memory.',
     '',
     `Source: ${ctx.source}`,
     `Tags: ${tagsLine}`,
@@ -76,21 +76,21 @@ export function buildQuerySystemPrompt(ctx: QueryPromptContext): string {
   // ─── Free-form (legacy) ────────────────────────────────────────────
   // Preserve the M2/M3 generic NetSuite-agent prompt verbatim. Operator
   // manual queries via Claude Desktop and any caller using the legacy
-  // `lolly_query({question})` shape land here.
+  // `finny_query({question})` shape land here.
   if (phase === 'free_form') {
     return [
-      "You are Lolly, a ShareChat NetSuite ERP agent. Answer the user's question by running the smallest number of SuiteQL or REST calls needed, then return a SINGLE fenced JSON code block matching this schema:",
+      "You are Finny, a ShareChat NetSuite ERP agent. Answer the user's question by running the smallest number of SuiteQL or REST calls needed, then return a SINGLE fenced JSON code block matching this schema:",
       '',
       ...envelopeContract(ctx.expected_shape),
     ].join('\n');
   }
 
   // ─── Discover phase ────────────────────────────────────────────────
-  // Lolly answers from her brain — she does NOT run NetSuite queries here.
+  // Finny answers from her brain — she does NOT run NetSuite queries here.
   //
   // v1 of this prompt put the prohibition on the LAST line and used the
   // ambiguous phrase "recent values, common defaults". Live smoke 2026-05-14
-  // showed Lolly probing NetSuite anyway (~50s discover, "193 GL accounts
+  // showed Finny probing NetSuite anyway (~50s discover, "193 GL accounts
   // mapped" + "March 2026 ₹208 Cr anomaly" in the narrative). Track G
   // rewrites with prohibition-first ordering, "MUST NOT" + DISCOVERY mode
   // markers in line 2, anti-trigger phrasing on instruction #3, and a
@@ -98,7 +98,7 @@ export function buildQuerySystemPrompt(ctx: QueryPromptContext): string {
   if (phase === 'discover') {
     // Wrap bless-list scope_doc with a "for reference only" preamble. The
     // scope_doc was written for execute-phase semantics ("aggregated by
-    // GL account", etc.) and Lolly was reading it as instructions to
+    // GL account", etc.) and Finny was reading it as instructions to
     // execute NOW. Framing prevents that.
     const blessLine = ctx.blessed
       ? [
@@ -110,7 +110,7 @@ export function buildQuerySystemPrompt(ctx: QueryPromptContext): string {
       : 'This intent is NOT in the bless-list. Use your brain knowledge of NetSuite + ShareChat workflows to figure out what scope makes sense.';
 
     return [
-      'You are Lolly in DISCOVERY mode. This is a planning step, not an execution step.',
+      'You are Finny in DISCOVERY mode. This is a planning step, not an execution step.',
       '',
       'You MUST NOT run any SuiteQL query, REST call, or any other live NetSuite probe in this phase. If you find yourself thinking "let me check NetSuite to confirm" — STOP. The execute phase is where queries run. This phase is for listing variables and clarifying questions only.',
       '',
@@ -137,7 +137,7 @@ export function buildQuerySystemPrompt(ctx: QueryPromptContext): string {
 
   // ─── Execute phase ─────────────────────────────────────────────────
   // Caller has resolved scope (or is sending an open intent without scope
-  // and accepting that Lolly will need to figure things out / return
+  // and accepting that Finny will need to figure things out / return
   // needs_input). Trust the input.
   const blessLineExec = ctx.blessed
     ? `Bless-list scope_doc (v${ctx.blessed.version}):\n${ctx.blessed.scope_doc}`
@@ -154,7 +154,7 @@ export function buildQuerySystemPrompt(ctx: QueryPromptContext): string {
       : '';
 
   return [
-    'You are Lolly, a ShareChat NetSuite ERP agent. The caller wants you to RUN this intent.',
+    'You are Finny, a ShareChat NetSuite ERP agent. The caller wants you to RUN this intent.',
     '',
     ctx.intent_string ? `Intent: "${ctx.intent_string}"` : '',
     ctx.user_question ? `User's verbatim question: "${ctx.user_question}"` : '',
@@ -166,9 +166,9 @@ export function buildQuerySystemPrompt(ctx: QueryPromptContext): string {
     '',
     `Expected output shape: ${ctx.expected_shape}.`,
     '',
-    // Track S follow-up: lolly_progress prompt instruction will land when the
-    // chatPipeline tool-use dispatcher exists. Until then, instructing Lolly
-    // to call lolly_progress would route nowhere (no interceptor). The
+    // Track S follow-up: finny_progress prompt instruction will land when the
+    // chatPipeline tool-use dispatcher exists. Until then, instructing Finny
+    // to call finny_progress would route nowhere (no interceptor). The
     // schema/Task/builder/skill plumbing ships ready-to-light-up.
     ...envelopeContract(ctx.expected_shape),
   ]

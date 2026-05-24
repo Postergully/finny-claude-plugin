@@ -1,17 +1,17 @@
 services:
   mcp-bridge:
-    image: ghcr.io/freema/openclaw-mcp:latest
-    container_name: openclaw-mcp
+    image: ghcr.io/freema/hermes-mcp:latest
+    container_name: hermes-mcp
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:3000"
     environment:
-      - OPENCLAW_URL=${OPENCLAW_URL:-http://host.docker.internal:18789}
-      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
-      - OPENCLAW_MODEL=${OPENCLAW_MODEL:-openclaw}
+      - FINNY_UPSTREAM_URL=${FINNY_UPSTREAM_URL:-http://host.docker.internal:18789}
+      - FINNY_UPSTREAM_TOKEN=${FINNY_UPSTREAM_TOKEN:-}
+      - FINNY_MODEL=${FINNY_MODEL:-hermes}
       - DEBUG=${DEBUG:-false}
       - AUTH_ENABLED=${AUTH_ENABLED:-true}
-      - MCP_CLIENT_ID=${MCP_CLIENT_ID:-openclaw}
+      - MCP_CLIENT_ID=${MCP_CLIENT_ID:-hermes}
       - MCP_CLIENT_SECRET=${MCP_CLIENT_SECRET:-}
       - MCP_ISSUER_URL=${MCP_ISSUER_URL:-}
       - CORS_ORIGINS=${CORS_ORIGINS:-https://claude.ai}

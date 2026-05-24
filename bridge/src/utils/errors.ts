@@ -1,23 +1,23 @@
-export class OpenClawError extends Error {
+export class HermesError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'OpenClawError';
+    this.name = 'HermesError';
   }
 }
 
-export class OpenClawConnectionError extends OpenClawError {
+export class HermesConnectionError extends HermesError {
   constructor(message: string) {
     super(message);
-    this.name = 'OpenClawConnectionError';
+    this.name = 'HermesConnectionError';
   }
 }
 
-export class OpenClawApiError extends OpenClawError {
+export class HermesApiError extends HermesError {
   public statusCode: number;
 
   constructor(message: string, statusCode: number) {
     super(message);
-    this.name = 'OpenClawApiError';
+    this.name = 'HermesApiError';
     this.statusCode = statusCode;
   }
 }

@@ -12,7 +12,7 @@ function resetEnv() {
       key.startsWith('AUTH_') ||
       key.startsWith('OAUTH_') ||
       key.startsWith('MCP_') ||
-      key.startsWith('OPENCLAW_') ||
+      key.startsWith('HERMES_') ||
       key === 'PORT' ||
       key === 'HOST' ||
       key === 'DEBUG' ||

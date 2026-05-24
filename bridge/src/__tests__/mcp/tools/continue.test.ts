@@ -1,23 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LollyEnvelopeSchema, type LollyEnvelope } from '../../../types/envelope.js';
+import { FinnyEnvelopeSchema, type FinnyEnvelope } from '../../../types/envelope.js';
 
 // Mock runQuery to deterministically return needs_input vs ok envelopes —
 // we don't want the real chat pipeline running for these flow tests. The
 // continue handler delegates to taskManager → background worker → runQuery,
 // and the runQuery mock satisfies that chain.
-const runQueryMock = vi.hoisted(() => vi.fn<(...args: unknown[]) => Promise<LollyEnvelope>>());
+const runQueryMock = vi.hoisted(() => vi.fn<(...args: unknown[]) => Promise<FinnyEnvelope>>());
 vi.mock('../../../mcp/tools/_shared/chatPipeline.js', () => ({
   runQuery: runQueryMock,
   // maybeRegisterNeedsInput is exported from chatPipeline but not used by the
   // continue handler directly. Re-export a passthrough so tests don't blow up
   // if anything else imports this module.
-  maybeRegisterNeedsInput: (env: LollyEnvelope) => env,
+  maybeRegisterNeedsInput: (env: FinnyEnvelope) => env,
 }));
 
 const { continueTool } = await import('../../../mcp/tools/continue.js');
 const conversationStore = await import('../../../mcp/tools/_shared/conversationStore.js');
 
-function makeOk(): LollyEnvelope {
+function makeOk(): FinnyEnvelope {
   return {
     status: 'ok',
     intent_restated: 'final answer for vendor 12345',
@@ -30,11 +30,11 @@ function makeOk(): LollyEnvelope {
     elapsed_ms: 10,
     env_used: 'production',
     bridge_version: '0.0.1',
-    lolly_session_id: 'sess',
+    finny_session_id: 'sess',
   };
 }
 
-function makeNeedsInput(): LollyEnvelope {
+function makeNeedsInput(): FinnyEnvelope {
   return {
     status: 'needs_input',
     intent_restated: 'still ambiguous',
@@ -50,15 +50,15 @@ function makeNeedsInput(): LollyEnvelope {
         { id: 'a', label: 'A' },
         { id: 'b', label: 'B' },
       ],
-      // The bridge ignores Lolly's conversation_id/round and re-keys; these
+      // The bridge ignores Finny's conversation_id/round and re-keys; these
       // are placeholders to satisfy Zod.
-      conversation_id: 'lolly-supplied',
+      conversation_id: 'finny-supplied',
       round: 1,
     },
     elapsed_ms: 5,
     env_used: 'production',
     bridge_version: '0.0.1',
-    lolly_session_id: 'sess',
+    finny_session_id: 'sess',
   };
 }
 
@@ -67,11 +67,11 @@ beforeEach(() => {
   conversationStore.__resetConversationStore_FOR_TEST_ONLY();
 });
 
-describe('lolly_continue — disambiguation flow', () => {
+describe('finny_continue — disambiguation flow', () => {
   it('valid conversation_id + selected_option → resumes execute, returns ok envelope', async () => {
     runQueryMock.mockResolvedValueOnce(makeOk());
 
-    // Seed a round-1 conversation as if Lolly had returned needs_input.
+    // Seed a round-1 conversation as if Finny had returned needs_input.
     const conversation_id =
       conversationStore.__conversationStoreSize_FOR_TEST_ONLY() === 0
         ? createSeed()
@@ -84,7 +84,7 @@ describe('lolly_continue — disambiguation flow', () => {
     });
 
     expect(res.status).toBe('ok');
-    expect(LollyEnvelopeSchema.safeParse(res).success).toBe(true);
+    expect(FinnyEnvelopeSchema.safeParse(res).success).toBe(true);
     expect(runQueryMock).toHaveBeenCalledTimes(1);
 
     // The replay should carry the augmented clarifications.
@@ -113,7 +113,7 @@ describe('lolly_continue — disambiguation flow', () => {
   });
 });
 
-describe('lolly_continue — round cap', () => {
+describe('finny_continue — round cap', () => {
   it('after 3 successful rounds, the 4th continue forces partial', async () => {
     // Simulate the sequence: original needs_input (round 1) → continue
     // returns needs_input (round 2) → continue returns needs_input (round 3)
@@ -122,7 +122,7 @@ describe('lolly_continue — round cap', () => {
 
     const conversation_id = createSeed();
 
-    // Round 2 — Lolly still asks back.
+    // Round 2 — Finny still asks back.
     const r2 = await continueTool.handler({
       conversation_id,
       response: { answer: 'first try' },
@@ -130,7 +130,7 @@ describe('lolly_continue — round cap', () => {
     });
     expect(r2.status).toBe('needs_input');
 
-    // Round 3 — Lolly still asks back.
+    // Round 3 — Finny still asks back.
     const r3 = await continueTool.handler({
       conversation_id,
       response: { answer: 'second try' },
@@ -153,7 +153,7 @@ describe('lolly_continue — round cap', () => {
   });
 });
 
-describe('lolly_continue — unknown / expired conversation_id', () => {
+describe('finny_continue — unknown / expired conversation_id', () => {
   it('unknown id → error.code gateway_rejected, no gateway call', async () => {
     const res = await continueTool.handler({
       conversation_id: 'conv-fake-does-not-exist',
@@ -168,7 +168,7 @@ describe('lolly_continue — unknown / expired conversation_id', () => {
   });
 });
 
-describe('lolly_continue — input validation', () => {
+describe('finny_continue — input validation', () => {
   it('rejects when neither selected_option nor answer is present', async () => {
     await expect(
       continueTool.handler({

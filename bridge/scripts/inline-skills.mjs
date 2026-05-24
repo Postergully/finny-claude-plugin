@@ -20,8 +20,8 @@ const skillsDir = resolve(repoRoot, 'plugin', 'skills');
 const outFile = resolve(repoRoot, 'bridge', 'src', 'mcp', 'prompts', 'inlined.ts');
 
 const SKILLS = [
-  { key: 'lolly_usage', dir: 'lolly-usage' },
-  { key: 'lolly_judging', dir: 'judging-output' },
+  { key: 'finny_usage', dir: 'finny-usage' },
+  { key: 'finny_judging', dir: 'judging-output' },
 ];
 
 function stripFrontmatter(raw) {
@@ -55,5 +55,5 @@ writeFileSync(outFile, body, 'utf8');
 
 // eslint-disable-next-line no-console
 console.error(
-  `inline-skills: wrote ${outFile} (lolly_usage=${bodies.lolly_usage.length}c, lolly_judging=${bodies.lolly_judging.length}c)`
+  `inline-skills: wrote ${outFile} (finny_usage=${bodies.finny_usage.length}c, finny_judging=${bodies.finny_judging.length}c)`
 );

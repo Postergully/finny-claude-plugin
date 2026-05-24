@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock the gateway client so we can hand-craft Lolly responses turn-by-turn.
+// Mock the gateway client so we can hand-craft Finny responses turn-by-turn.
 const chatMock = vi.hoisted(() =>
   vi.fn<(message: string, sessionId?: string) => Promise<{ response: string; model: string }>>()
 );
-vi.mock('../../../../openclaw/client.js', () => ({
-  OpenClawClient: vi.fn().mockImplementation(() => ({
+vi.mock('../../../../hermes/client.js', () => ({
+  HermesClient: vi.fn().mockImplementation(() => ({
     chat: chatMock,
   })),
 }));
@@ -28,7 +28,7 @@ describe('chatPipeline.runQuery — schema-aware correction retry (Track D)', ()
   });
 
   it('first response missing required fields → correction prompt names every missing path → second response succeeds', async () => {
-    // First turn: Lolly returns a JSON shape with the right top-level status
+    // First turn: Finny returns a JSON shape with the right top-level status
     // but truncated tail (the realistic deadline-pressure failure mode).
     // Missing: assumptions, unanswered, sources, confidence, confidence_reason.
     chatMock.mockResolvedValueOnce({
@@ -41,7 +41,7 @@ describe('chatPipeline.runQuery — schema-aware correction retry (Track D)', ()
       model: 'mock',
     });
 
-    // Second turn: Lolly returns a complete envelope. We capture the prompt
+    // Second turn: Finny returns a complete envelope. We capture the prompt
     // she received to assert the structured-issue paths reached her.
     chatMock.mockResolvedValueOnce({
       response: fenced({
@@ -75,14 +75,14 @@ describe('chatPipeline.runQuery — schema-aware correction retry (Track D)', ()
     const correctionText = String(correctionInvocation);
 
     // Track D's contract: each missing field is named by path on its own
-    // bullet line so Lolly has a concrete target to repair.
+    // bullet line so Finny has a concrete target to repair.
     expect(correctionText).toMatch(/- assumptions:/);
     expect(correctionText).toMatch(/- unanswered:/);
     expect(correctionText).toMatch(/- sources:/);
     expect(correctionText).toMatch(/- confidence:/);
     expect(correctionText).toMatch(/- confidence_reason:/);
 
-    // Sanity: the correction prompt also instructs Lolly to return a single
+    // Sanity: the correction prompt also instructs Finny to return a single
     // fenced JSON block.
     expect(correctionText).toMatch(/SINGLE fenced JSON code block/);
   });
@@ -177,7 +177,7 @@ describe('chatPipeline.runQuery — two-phase system prompt content (Track E)', 
     expect(promptSent).toContain('"p&l_statement"');
     expect(promptSent).toContain('give me P&L');
     expect(promptSent).toContain('bless-list (v1.0)');
-    // scope_doc is reproduced for Lolly's reference (wrapped per Track G
+    // scope_doc is reproduced for Finny's reference (wrapped per Track G
     // with a "for reference only" preamble — see prompt-shape test for the
     // exact wording assertions).
     expect(promptSent).toContain('Profit & loss aggregated by GL account');
@@ -258,11 +258,11 @@ describe('chatPipeline.runQuery — two-phase system prompt content (Track E)', 
     expect(promptSent).not.toContain('Bless-list scope_doc');
   });
 
-  it('Lolly emits needs_input → bridge allocates conversation_id and patches the envelope (Track F)', async () => {
-    // Lolly returns a needs_input envelope WITHOUT a conversation_id (or with
+  it('Finny emits needs_input → bridge allocates conversation_id and patches the envelope (Track F)', async () => {
+    // Finny returns a needs_input envelope WITHOUT a conversation_id (or with
     // a placeholder that the bridge should overwrite). Bridge owns the id
     // lifecycle: generate, store, patch envelope.
-    const lollyEnvelopeMissingConvId = fenced({
+    const finnyEnvelopeMissingConvId = fenced({
       status: 'needs_input',
       intent_restated: 'three vendors match Acme',
       assumptions: [],
@@ -277,13 +277,13 @@ describe('chatPipeline.runQuery — two-phase system prompt content (Track E)', 
           { id: '12345', label: 'Acme Corp' },
           { id: '12346', label: 'Acme Holdings' },
         ],
-        // Lolly's value here gets overwritten by the bridge.
-        conversation_id: 'lolly-placeholder',
+        // Finny's value here gets overwritten by the bridge.
+        conversation_id: 'finny-placeholder',
         round: 99,
       },
       env_used: 'production',
     });
-    chatMock.mockResolvedValueOnce({ response: lollyEnvelopeMissingConvId, model: 'mock' });
+    chatMock.mockResolvedValueOnce({ response: finnyEnvelopeMissingConvId, model: 'mock' });
 
     const env = await runQuery({
       question: 'balance for Acme',
@@ -301,10 +301,10 @@ describe('chatPipeline.runQuery — two-phase system prompt content (Track E)', 
     expect(env.needs_input).toBeDefined();
     // Bridge overwrites with its own id.
     expect(env.needs_input!.conversation_id).toMatch(/^conv-/);
-    expect(env.needs_input!.conversation_id).not.toBe('lolly-placeholder');
-    // Bridge resets round to 1 (Lolly's value of 99 is bookkeeping noise).
+    expect(env.needs_input!.conversation_id).not.toBe('finny-placeholder');
+    // Bridge resets round to 1 (Finny's value of 99 is bookkeeping noise).
     expect(env.needs_input!.round).toBe(1);
-    // Lolly's question + options reach cowork unchanged.
+    // Finny's question + options reach cowork unchanged.
     expect(env.needs_input!.question).toBe('Which Acme?');
     expect(env.needs_input!.options).toHaveLength(2);
   });
@@ -321,8 +321,8 @@ describe('chatPipeline.runQuery — two-phase system prompt content (Track E)', 
     });
 
     const promptSent = String(chatMock.mock.calls[0]?.[0]);
-    // Legacy preamble starts with "You are Lolly, a ShareChat NetSuite ERP agent."
-    expect(promptSent).toContain('You are Lolly, a ShareChat NetSuite ERP agent');
+    // Legacy preamble starts with "You are Finny, a ShareChat NetSuite ERP agent."
+    expect(promptSent).toContain('You are Finny, a ShareChat NetSuite ERP agent');
     // Phase markers should NOT appear in free_form.
     expect(promptSent).not.toContain('DISCOVERY mode');
     expect(promptSent).not.toContain('Bless-list scope_doc');
@@ -333,7 +333,7 @@ describe('chatPipeline.runQuery — discover violation surfacing (Track G)', () 
   beforeEach(() => chatMock.mockReset());
 
   it('discover envelope with kind:suiteql sources annotates confidence_reason', async () => {
-    // Simulate Lolly violating the prompt: she returns a discover narrative
+    // Simulate Finny violating the prompt: she returns a discover narrative
     // but cited a SuiteQL source — proof she ran the query she was told
     // not to run. Bridge must surface this to the access log without
     // stripping the answer.
@@ -413,7 +413,7 @@ describe('chatPipeline.runQuery — discover violation surfacing (Track G)', () 
       },
       sources: [
         { kind: 'memory', ref: 'user-defaults' },
-        { kind: 'skill', ref: 'lolly-usage' },
+        { kind: 'skill', ref: 'finny-usage' },
       ],
       confidence: 'medium',
       confidence_reason: 'memory + skill',
@@ -431,7 +431,7 @@ describe('chatPipeline.runQuery — discover violation surfacing (Track G)', () 
       phase: 'discover',
     });
 
-    // No bridge annotation — confidence_reason is whatever Lolly wrote.
+    // No bridge annotation — confidence_reason is whatever Finny wrote.
     expect(env.confidence_reason).toBe('memory + skill');
   });
 

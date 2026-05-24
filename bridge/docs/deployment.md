@@ -3,24 +3,24 @@
 ## docker-compose.yml
 
 The provided `docker-compose.yml` runs the MCP bridge server in a hardened container.
-The OpenClaw gateway runs on your host machine (or elsewhere) — the bridge connects to it
+The Hermes gateway runs on your host machine (or elsewhere) — the bridge connects to it
 via `host.docker.internal`.
 
 ```yaml
 services:
   mcp-bridge:
     build: .
-    container_name: openclaw-mcp
+    container_name: hermes-mcp
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:3000"
     environment:
-      - OPENCLAW_URL=${OPENCLAW_URL:-http://host.docker.internal:18789}
-      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
-      - OPENCLAW_MODEL=${OPENCLAW_MODEL:-openclaw}
+      - FINNY_UPSTREAM_URL=${FINNY_UPSTREAM_URL:-http://host.docker.internal:18789}
+      - FINNY_UPSTREAM_TOKEN=${FINNY_UPSTREAM_TOKEN:-}
+      - FINNY_MODEL=${FINNY_MODEL:-hermes}
       - DEBUG=${DEBUG:-false}
       - AUTH_ENABLED=${AUTH_ENABLED:-true}
-      - MCP_CLIENT_ID=${MCP_CLIENT_ID:-openclaw}
+      - MCP_CLIENT_ID=${MCP_CLIENT_ID:-hermes}
       - MCP_CLIENT_SECRET=${MCP_CLIENT_SECRET:-}
       - MCP_ISSUER_URL=${MCP_ISSUER_URL:-}
       - MCP_REDIRECT_URIS=${MCP_REDIRECT_URIS:-}
@@ -42,12 +42,12 @@ services:
 ## .env
 
 ```bash
-# Token for OpenClaw gateway authentication
-OPENCLAW_GATEWAY_TOKEN=your-gateway-token
+# Token for Hermes gateway authentication
+FINNY_UPSTREAM_TOKEN=your-gateway-token
 
 # MCP OAuth client credentials
 # Generate secret with: openssl rand -hex 32
-MCP_CLIENT_ID=openclaw
+MCP_CLIENT_ID=hermes
 MCP_CLIENT_SECRET=your-client-secret
 
 # Enable OAuth (required for production SSE)
@@ -80,7 +80,7 @@ docker compose up -d
 - [ ] `MCP_ISSUER_URL` set to public HTTPS URL (when behind reverse proxy)
 - [ ] `MCP_REDIRECT_URIS` restricted to known callback URLs
 - [ ] CORS restricted to known origins (`CORS_ORIGINS=https://claude.ai`)
-- [ ] `OPENCLAW_GATEWAY_TOKEN` set for gateway authentication
+- [ ] `FINNY_UPSTREAM_TOKEN` set for gateway authentication
 - [ ] Dynamic client registration is disabled (default — no `/register` endpoint)
 - [ ] Container runs read-only with no-new-privileges
 
@@ -96,7 +96,7 @@ Caddy automatically provisions Let's Encrypt certificates.
 
 ```
 mcp.your-domain.com {
-    reverse_proxy openclaw-mcp:3000
+    reverse_proxy hermes-mcp:3000
 }
 ```
 
@@ -150,12 +150,12 @@ server {
 }
 ```
 
-## OpenClaw Gateway Prerequisites
+## Hermes Gateway Prerequisites
 
-The MCP bridge communicates with the OpenClaw gateway via its OpenAI-compatible HTTP API (`/v1/chat/completions`). This endpoint is **disabled by default** — you must enable it in your OpenClaw config:
+The MCP bridge communicates with the Hermes gateway via its OpenAI-compatible HTTP API (`/v1/chat/completions`). This endpoint is **disabled by default** — you must enable it in your Hermes config:
 
 ```json5
-// openclaw.json
+// hermes.json
 {
   "gateway": {
     "http": {
@@ -176,22 +176,22 @@ Without this, the MCP bridge will receive `405 Method Not Allowed` from the gate
 | MCP Bridge | Gateway | Result |
 |------------|---------|--------|
 | ≤ 1.2.2 | ≥ 2026.3.24 | `400 Bad Request` — bridge sends `model: "claude-opus-4-5"`, gateway rejects it |
-| ≥ 1.3.0 | ≥ 2026.3.24 | Works — bridge defaults to `model: "openclaw"` |
-| ≥ 1.3.0 | older | Works — set `OPENCLAW_MODEL` to whatever the older gateway expects |
+| ≥ 1.3.0 | ≥ 2026.3.24 | Works — bridge defaults to `model: "hermes-agent"` |
+| ≥ 1.3.0 | older | Works — set `FINNY_MODEL` to whatever the older gateway expects |
 
-If you're running a non-standard gateway setup with custom agent routing, set `OPENCLAW_MODEL=openclaw/<agentId>` to match your configuration.
+If you're running a non-standard gateway setup with custom agent routing, set `FINNY_MODEL=hermes/<agentId>` to match your configuration.
 
 ## Troubleshooting
 
-### `400 Bad Request` from gateway on `openclaw_chat`
+### `400 Bad Request` from gateway on `hermes_chat`
 
-Gateway versions 2026.3.24+ require `model: "openclaw"` (or `"openclaw/<agentId>"`). The MCP bridge defaults to `"openclaw"` since v1.3.0. If you're using an older bridge version, upgrade or set `OPENCLAW_MODEL=openclaw`. If you need custom model routing, set `OPENCLAW_MODEL` to the value your gateway expects.
+Gateway versions 2026.3.24+ require `model: "hermes-agent"` (or `"hermes/<agentId>"`). The MCP bridge defaults to `"hermes-agent"` since v1.3.0. If you're using an older bridge version, upgrade or set `FINNY_MODEL=hermes`. If you need custom model routing, set `FINNY_MODEL` to the value your gateway expects.
 
 To diagnose, enable debug logging (`DEBUG=true`) which logs the outgoing request body and gateway error responses.
 
 ### `405 Method Not Allowed` from gateway
 
-The OpenClaw gateway's HTTP chat completions endpoint is disabled by default. Enable it in `openclaw.json` — see [Gateway Prerequisites](#openclaw-gateway-prerequisites) above.
+The Hermes gateway's HTTP chat completions endpoint is disabled by default. Enable it in `hermes.json` — see [Gateway Prerequisites](#hermes-gateway-prerequisites) above.
 
 ### `Protected resource http://localhost:3000/mcp does not match expected https://...`
 
@@ -199,4 +199,4 @@ You're running behind a reverse proxy but haven't set `MCP_ISSUER_URL`. The OAut
 
 ### `fetch failed` / MCP bridge can't reach gateway
 
-When both services run in Docker, the MCP bridge must connect via the Docker network hostname (e.g., `http://openclaw-gateway:18789`), not `localhost`. Make sure both containers are on the same Docker network.
+When both services run in Docker, the MCP bridge must connect via the Docker network hostname (e.g., `http://hermes-gateway:18789`), not `localhost`. Make sure both containers are on the same Docker network.

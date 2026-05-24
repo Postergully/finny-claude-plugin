@@ -2,7 +2,7 @@
 
 ## 🔐 Security Considerations
 
-OpenClaw MCP Bridge provides access to your AI assistant. **Proper security is critical.**
+Hermes MCP Bridge provides access to your AI assistant. **Proper security is critical.**
 
 ### Threat Model
 
@@ -42,9 +42,9 @@ Best for enterprise deployments with existing identity providers:
 ```bash
 OAUTH_ENABLED=true
 OAUTH_INTROSPECTION_ENDPOINT=https://auth.company.com/oauth2/introspect
-OAUTH_CLIENT_ID=openclaw-mcp
+OAUTH_CLIENT_ID=hermes-mcp
 OAUTH_CLIENT_SECRET=your-client-secret
-OAUTH_REQUIRED_SCOPES=openclaw:read,openclaw:write
+OAUTH_REQUIRED_SCOPES=hermes:read,hermes:write
 ```
 
 Supported providers:
@@ -117,7 +117,7 @@ If you discover a security vulnerability, please:
 We release security patches as soon as possible. Keep your installation updated:
 
 ```bash
-npm update -g openclaw-mcp
+npm update -g hermes-mcp
 ```
 
 Subscribe to security advisories on GitHub.

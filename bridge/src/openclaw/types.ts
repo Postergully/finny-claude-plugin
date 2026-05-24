@@ -32,7 +32,7 @@ export interface OpenAIChatCompletionResponse {
 
 // MCP-facing types (facade over OpenAI response)
 
-export interface OpenClawChatResponse {
+export interface HermesChatResponse {
   response: string;
   model?: string;
   usage?: {
@@ -42,7 +42,7 @@ export interface OpenClawChatResponse {
   };
 }
 
-export interface OpenClawHealthResponse {
+export interface HermesHealthResponse {
   status: 'ok' | 'error';
   message?: string;
 }

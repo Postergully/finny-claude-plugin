@@ -18,10 +18,10 @@ describe('logger', () => {
   }
 
   describe('log', () => {
-    it('logs with [openclaw-mcp] prefix', async () => {
+    it('logs with [hermes-mcp] prefix', async () => {
       const { log } = await loadLogger();
       log('hello world');
-      expect(consoleSpy).toHaveBeenCalledWith('[openclaw-mcp] hello world');
+      expect(consoleSpy).toHaveBeenCalledWith('[hermes-mcp] hello world');
     });
   });
 
@@ -29,20 +29,20 @@ describe('logger', () => {
     it('logs with ERROR prefix', async () => {
       const { logError } = await loadLogger();
       logError('something failed');
-      expect(consoleSpy).toHaveBeenCalledWith('[openclaw-mcp] ERROR: something failed');
+      expect(consoleSpy).toHaveBeenCalledWith('[hermes-mcp] ERROR: something failed');
     });
 
     it('logs Error instance message', async () => {
       const { logError } = await loadLogger();
       logError('oops', new Error('details'));
-      expect(consoleSpy).toHaveBeenCalledWith('[openclaw-mcp] ERROR: oops');
-      expect(consoleSpy).toHaveBeenCalledWith('[openclaw-mcp] details');
+      expect(consoleSpy).toHaveBeenCalledWith('[hermes-mcp] ERROR: oops');
+      expect(consoleSpy).toHaveBeenCalledWith('[hermes-mcp] details');
     });
 
     it('logs non-Error objects generically', async () => {
       const { logError } = await loadLogger();
       logError('oops', 'string-error');
-      expect(consoleSpy).toHaveBeenCalledWith('[openclaw-mcp] (non-Error object thrown)');
+      expect(consoleSpy).toHaveBeenCalledWith('[hermes-mcp] (non-Error object thrown)');
     });
   });
 
@@ -57,7 +57,7 @@ describe('logger', () => {
       const { logDebug, setDebugEnabled } = await loadLogger();
       setDebugEnabled(true);
       logDebug('test message');
-      expect(consoleSpy).toHaveBeenCalledWith('[openclaw-mcp] DEBUG: test message');
+      expect(consoleSpy).toHaveBeenCalledWith('[hermes-mcp] DEBUG: test message');
       setDebugEnabled(false);
     });
 
@@ -82,7 +82,7 @@ describe('logger', () => {
       setDebugEnabled(true);
       logDebug(factory);
       expect(factory).toHaveBeenCalledTimes(1);
-      expect(consoleSpy).toHaveBeenCalledWith('[openclaw-mcp] DEBUG: lazy message');
+      expect(consoleSpy).toHaveBeenCalledWith('[hermes-mcp] DEBUG: lazy message');
       setDebugEnabled(false);
     });
   });

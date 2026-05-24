@@ -51,7 +51,7 @@ jobs:
 
       - name: Format check (bridge, ubuntu only)
         if: matrix.os == 'ubuntu-latest'
-        run: pnpm --filter @postergully/lolly-mcp format:check
+        run: pnpm --filter @postergully/finny-mcp format:check
 
       - name: Type check
         run: pnpm -r typecheck
@@ -60,7 +60,7 @@ jobs:
         run: pnpm -r build
 
       - name: Test
-        run: pnpm --filter @postergully/lolly-mcp test:run
+        run: pnpm --filter @postergully/finny-mcp test:run
 
       - name: Upload bridge dist artifact
         if: matrix.node-version == 20 && matrix.os == 'ubuntu-latest'

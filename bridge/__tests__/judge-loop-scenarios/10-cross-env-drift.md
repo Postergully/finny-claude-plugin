@@ -1,10 +1,10 @@
 # Scenario 10 — cross-env-drift
 
 ## Question
-User explicitly asks a production-scoped question, but Lolly's session/context may answer from sandbox.
+User explicitly asks a production-scoped question, but Finny's session/context may answer from sandbox.
 
 ## Expected tool
-`lolly_query` with `entity_hints.env: 'production'`.
+`finny_query` with `entity_hints.env: 'production'`.
 
 ## Tool input
 ```json

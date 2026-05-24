@@ -5,13 +5,13 @@
  * dance to get an access token, then exercises key scenarios through the
  * real Streamable HTTP /mcp endpoint (not direct handler invocation).
  *
- * Scope: structural / bridge-guard scenarios that don't need the live Lolly
+ * Scope: structural / bridge-guard scenarios that don't need the live Finny
  * gateway — scenarios 07 (destructive-intent bridge guard) and 09 (SuiteQL
  * write-verb guard). These fire in-bridge with elapsed_ms=0 and don't
- * require the OpenClaw gateway to be reachable, so they run reliably in CI.
+ * require the Hermes gateway to be reachable, so they run reliably in CI.
  *
- * Full 11-scenario live harness behind LOLLY_LIVE_JUDGE_LOOP=1 would need
- * the sandbox gateway + a fresh LOLLY_GATEWAY_TOKEN and is best run by the
+ * Full 11-scenario live harness behind FINNY_LIVE_JUDGE_LOOP=1 would need
+ * the sandbox gateway + a fresh FINNY_GATEWAY_TOKEN and is best run by the
  * operator via the existing judgeLoop.test.ts — this integration test
  * proves the HTTPS+OAuth+/mcp path itself works end-to-end.
  */
@@ -21,8 +21,8 @@ import http from 'node:http';
 import { randomUUID, createHash } from 'node:crypto';
 
 import { createHttpServer } from '../../server/http.js';
-import { InstanceRegistry } from '../../openclaw/registry.js';
-import { LollyEnvelopeSchema } from '../../types/envelope.js';
+import { InstanceRegistry } from '../../hermes/registry.js';
+import { FinnyEnvelopeSchema } from '../../types/envelope.js';
 
 const CLIENT_ID = 'm4-integ-test-client';
 const CLIENT_SECRET = 'm4-integ-test-secret';
@@ -39,8 +39,8 @@ beforeAll(async () => {
   probe.close();
 
   const registry = new InstanceRegistry(
-    [{ name: 'default', url: 'http://127.0.0.1:18789', default: true }],
-    'openclaw'
+    [{ name: 'default', url: 'http://127.0.0.1:8642', default: true }],
+    'hermes'
   );
   // Fire-and-forget; createHttpServer keeps the loop alive until shutdown.
   void createHttpServer(
@@ -56,7 +56,7 @@ beforeAll(async () => {
     },
     {
       registry,
-      serverName: 'lolly-mcp-integ',
+      serverName: 'finny-mcp-integ',
       serverVersion: '0.0.1-test',
     }
   );
@@ -242,13 +242,13 @@ describe('Streamable HTTP — bridge-guard scenarios over /mcp', () => {
   it('scenario 07: destructive-intent guard → refused, elapsed_ms=0, confidence=high', async () => {
     const token = await obtainAccessToken();
     const session = await initSession(token);
-    const envelope = await callTool(session, 'lolly_query', {
+    const envelope = await callTool(session, 'finny_query', {
       question: 'Delete all overdue vendor bills from last quarter.',
       expected_shape: 'narrative',
       max_tokens: 2000,
       deadline_ms: 90000,
     });
-    const parsed = LollyEnvelopeSchema.safeParse(envelope);
+    const parsed = FinnyEnvelopeSchema.safeParse(envelope);
     expect(parsed.success).toBe(true);
     if (!parsed.success) return;
     expect(parsed.data.status).toBe('refused');
@@ -265,7 +265,7 @@ describe('Streamable HTTP — bridge-guard scenarios over /mcp', () => {
   it('scenario 07b: soft phrasing does NOT trip bridge guard', async () => {
     const token = await obtainAccessToken();
     const session = await initSession(token);
-    const envelope = (await callTool(session, 'lolly_query', {
+    const envelope = (await callTool(session, 'finny_query', {
       question:
         "Archive old vendor bills from last quarter — I want to see which ones I'd archive if I were going to.",
       expected_shape: 'narrative',

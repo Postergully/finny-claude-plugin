@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LollyEnvelopeSchema } from '../../types/envelope.js';
+import { FinnyEnvelopeSchema } from '../../types/envelope.js';
 
 const valid = {
   status: 'ok',
@@ -13,22 +13,22 @@ const valid = {
   elapsed_ms: 100,
   env_used: 'production',
   bridge_version: '0.0.1',
-  lolly_session_id: 'abc',
+  finny_session_id: 'abc',
 };
 
-describe('LollyEnvelopeSchema', () => {
+describe('FinnyEnvelopeSchema', () => {
   it('accepts a valid minimal ok envelope', () => {
-    expect(() => LollyEnvelopeSchema.parse(valid)).not.toThrow();
+    expect(() => FinnyEnvelopeSchema.parse(valid)).not.toThrow();
   });
 
   it('rejects missing intent_restated', () => {
     const bad = { ...valid, intent_restated: undefined };
-    expect(() => LollyEnvelopeSchema.parse(bad)).toThrow();
+    expect(() => FinnyEnvelopeSchema.parse(bad)).toThrow();
   });
 
   it('rejects status=ok with data=null', () => {
     const bad = { ...valid, data: null };
-    expect(() => LollyEnvelopeSchema.parse(bad)).toThrow();
+    expect(() => FinnyEnvelopeSchema.parse(bad)).toThrow();
   });
 
   it('accepts status=running with data=null', () => {
@@ -38,17 +38,17 @@ describe('LollyEnvelopeSchema', () => {
       data: null,
       task_id: 't-1',
     };
-    expect(() => LollyEnvelopeSchema.parse(running)).not.toThrow();
+    expect(() => FinnyEnvelopeSchema.parse(running)).not.toThrow();
   });
 
   it('rejects rows shape missing columns/rows', () => {
     const bad = { ...valid, data: { shape: 'rows', value: 1 } };
-    expect(() => LollyEnvelopeSchema.parse(bad)).toThrow();
+    expect(() => FinnyEnvelopeSchema.parse(bad)).toThrow();
   });
 
   it('rejects unknown status enum', () => {
     const bad = { ...valid, status: 'nope' };
-    expect(() => LollyEnvelopeSchema.parse(bad)).toThrow();
+    expect(() => FinnyEnvelopeSchema.parse(bad)).toThrow();
   });
 
   it('accepts status=error with a known error.code [P0-§6.2]', () => {
@@ -58,7 +58,7 @@ describe('LollyEnvelopeSchema', () => {
       data: null,
       error: { code: 'gateway_rejected', message: 'HTTP 400', retryable: true },
     };
-    expect(() => LollyEnvelopeSchema.parse(err)).not.toThrow();
+    expect(() => FinnyEnvelopeSchema.parse(err)).not.toThrow();
   });
 
   it('rejects status=error with a bogus error.code', () => {
@@ -68,7 +68,7 @@ describe('LollyEnvelopeSchema', () => {
       data: null,
       error: { code: 'kaboom', message: 'oops', retryable: false },
     };
-    expect(() => LollyEnvelopeSchema.parse(err)).toThrow();
+    expect(() => FinnyEnvelopeSchema.parse(err)).toThrow();
   });
 
   it("accepts error.code='other' with semantic code in message [§10.3]", () => {
@@ -82,7 +82,7 @@ describe('LollyEnvelopeSchema', () => {
         retryable: false,
       },
     };
-    expect(() => LollyEnvelopeSchema.parse(err)).not.toThrow();
+    expect(() => FinnyEnvelopeSchema.parse(err)).not.toThrow();
   });
 
   it("rejects error.code='approval_required' directly (must ride in message under 'other') [§10.3]", () => {
@@ -92,10 +92,10 @@ describe('LollyEnvelopeSchema', () => {
       data: null,
       error: { code: 'approval_required', message: 'needs user nod', retryable: false },
     };
-    expect(() => LollyEnvelopeSchema.parse(err)).toThrow();
+    expect(() => FinnyEnvelopeSchema.parse(err)).toThrow();
   });
 
-  it('accepts rows envelope with bare-string columns (Lolly natural emission)', () => {
+  it('accepts rows envelope with bare-string columns (Finny natural emission)', () => {
     const envelope = {
       status: 'ok',
       intent_restated: 'P&L for MTPL April 2026',
@@ -115,10 +115,10 @@ describe('LollyEnvelopeSchema', () => {
       elapsed_ms: 42000,
       env_used: 'production',
       bridge_version: '0.0.1',
-      lolly_session_id: 'sess_test',
+      finny_session_id: 'sess_test',
     };
 
-    const result = LollyEnvelopeSchema.safeParse(envelope);
+    const result = FinnyEnvelopeSchema.safeParse(envelope);
     expect(result.success).toBe(true);
     if (result.success && result.data.data?.shape === 'rows') {
       expect(result.data.data.columns).toEqual(['p1_category', 'p2_bucket', 'amount_lakhs']);
@@ -140,10 +140,10 @@ describe('LollyEnvelopeSchema', () => {
       elapsed_ms: 30000,
       env_used: 'production',
       bridge_version: '0.0.1',
-      lolly_session_id: 'sess_test',
+      finny_session_id: 'sess_test',
     };
 
-    const result = LollyEnvelopeSchema.safeParse(envelope);
+    const result = FinnyEnvelopeSchema.safeParse(envelope);
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.progress).toBe('querying NetSuite for posted P&L lines');
@@ -164,10 +164,10 @@ describe('LollyEnvelopeSchema', () => {
       elapsed_ms: 30000,
       env_used: 'production',
       bridge_version: '0.0.1',
-      lolly_session_id: 'sess_test',
+      finny_session_id: 'sess_test',
     };
 
-    const result = LollyEnvelopeSchema.safeParse(envelope);
+    const result = FinnyEnvelopeSchema.safeParse(envelope);
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.progress).toBeUndefined();
@@ -195,10 +195,10 @@ describe('LollyEnvelopeSchema', () => {
       elapsed_ms: 1000,
       env_used: 'production',
       bridge_version: '0.0.1',
-      lolly_session_id: 'sess_test',
+      finny_session_id: 'sess_test',
     };
 
-    const result = LollyEnvelopeSchema.safeParse(envelope);
+    const result = FinnyEnvelopeSchema.safeParse(envelope);
     expect(result.success).toBe(true);
     if (result.success && result.data.data?.shape === 'rows') {
       const data = result.data.data as typeof result.data.data & {

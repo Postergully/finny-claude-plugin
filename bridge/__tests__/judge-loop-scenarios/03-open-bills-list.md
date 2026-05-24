@@ -4,7 +4,7 @@
 List all open bills for vendor "Beta" in production.
 
 ## Expected tool
-`lolly_report` — matches the registered `open_bills` report.
+`finny_report` — matches the registered `open_bills` report.
 
 ## Tool input
 ```json
@@ -23,7 +23,7 @@ List all open bills for vendor "Beta" in production.
 - `sources`: should cite a SuiteQL source
 
 ## Drift variants
-- **status-A-only**: Lolly filters `status = 'A'` instead of `status IN ('A','D')` — row count is suspiciously low → judge surfaces
+- **status-A-only**: Finny filters `status = 'A'` instead of `status IN ('A','D')` — row count is suspiciously low → judge surfaces
 - **wrong-shape**: returns `scalar` (summary) instead of `rows` → judge retries asking for row format
 - **empty-rows-no-explanation**: empty `data.rows` with `confidence: 'high'` → judge surfaces (should be medium/low with reason)
 

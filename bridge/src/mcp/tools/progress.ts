@@ -1,5 +1,5 @@
 /**
- * lolly_progress: internal tool Lolly calls during long execute phases
+ * finny_progress: internal tool Finny calls during long execute phases
  * to emit a stage string. The bridge intercepts these calls server-side
  * and writes the string to the current in-flight task record. Cowork
  * does NOT see this tool — it's not registered in tools-registration.ts
@@ -30,20 +30,20 @@ export function applyProgress(
   const parsed = progressInputSchema.parse(input);
   const ok = taskManager.updateProgress(ctx.taskId, parsed.text);
   if (!ok) {
-    log(`[lolly_progress] dropped: task=${ctx.taskId} reason=task_missing_or_terminal`);
+    log(`[finny_progress] dropped: task=${ctx.taskId} reason=task_missing_or_terminal`);
     return { ok: false, reason: 'task_missing_or_terminal' };
   }
-  log(`[lolly_progress] task=${ctx.taskId} text="${parsed.text.slice(0, 80)}"`);
+  log(`[finny_progress] task=${ctx.taskId} text="${parsed.text.slice(0, 80)}"`);
   return { ok: true };
 }
 
 export const progressTool = {
-  name: 'lolly_progress' as const,
+  name: 'finny_progress' as const,
   description:
-    'Internal-only. Lolly calls this during long execute phases (>10s expected) to emit a short stage string (≤500 chars) like "querying NetSuite", "applying sign conventions". Cowork does NOT see this tool; the bridge intercepts and writes to the task record.',
+    'Internal-only. Finny calls this during long execute phases (>10s expected) to emit a short stage string (≤500 chars) like "querying NetSuite", "applying sign conventions". Cowork does NOT see this tool; the bridge intercepts and writes to the task record.',
   inputSchema: progressInputSchema,
   handler: async (_input: ProgressInput) => {
-    log('[lolly_progress] direct handler hit (unexpected — should be routed)');
+    log('[finny_progress] direct handler hit (unexpected — should be routed)');
     return { ok: false, reason: 'direct_invocation_unsupported' };
   },
 };

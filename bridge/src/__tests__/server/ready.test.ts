@@ -1,12 +1,12 @@
 /**
  * Tests for GET /ready — bridge deep readiness check (D7/D11 mitigation).
  *
- * /ready probes openclaw via OpenClawClient.probeReady() and returns:
- *   200 {ok:true, openclaw:"reachable", latency_ms} when probe ok
- *   503 {ok:false, openclaw:"unreachable", error, latency_ms} otherwise
+ * /ready probes hermes via HermesClient.probeReady() and returns:
+ *   200 {ok:true, hermes:"reachable", latency_ms} when probe ok
+ *   503 {ok:false, hermes:"unreachable", error, latency_ms} otherwise
  *
  * Distinguishes "bridge process up" (= /health) from "bridge can reach
- * openclaw" (= /ready). Body intentionally omits OPENCLAW_URL + tokens.
+ * hermes" (= /ready). Body intentionally omits FINNY_UPSTREAM_URL + tokens.
  */
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
@@ -15,18 +15,18 @@ import express from 'express';
 import type { Express } from 'express';
 
 import { registerReadyRoute } from '../../server/ready.js';
-import type { InstanceRegistry } from '../../openclaw/registry.js';
-import type { OpenClawClient } from '../../openclaw/client.js';
+import type { InstanceRegistry } from '../../hermes/registry.js';
+import type { HermesClient } from '../../hermes/client.js';
 
-type ProbeResult = Awaited<ReturnType<OpenClawClient['probeReady']>>;
+type ProbeResult = Awaited<ReturnType<HermesClient['probeReady']>>;
 
 function makeRegistryStub(probeResult: ProbeResult): InstanceRegistry {
   const client = {
     probeReady: vi.fn(async () => probeResult),
   };
   return {
-    getDefault: () => client as unknown as OpenClawClient,
-    resolve: () => ({ name: 'default', client: client as unknown as OpenClawClient }),
+    getDefault: () => client as unknown as HermesClient,
+    resolve: () => ({ name: 'default', client: client as unknown as HermesClient }),
   } as unknown as InstanceRegistry;
 }
 
@@ -63,7 +63,7 @@ describe('GET /ready', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.ok).toBe(true);
-    expect(body.openclaw).toBe('reachable');
+    expect(body.hermes).toBe('reachable');
     expect(typeof body.latency_ms).toBe('number');
   });
 
@@ -90,7 +90,7 @@ describe('GET /ready', () => {
     const body = (await res.json()) as Record<string, unknown>;
     expect(body.ok).toBe(false);
     expect(body.error).toBe('timeout');
-    expect(body.openclaw).toBe('unreachable');
+    expect(body.hermes).toBe('unreachable');
   });
 
   it('returns 503 with connection_refused error on tunnel down', async () => {
@@ -108,7 +108,7 @@ describe('GET /ready', () => {
     expect(body.error).toBe('connection_refused');
   });
 
-  it('does not echo OPENCLAW_URL or token in body', async () => {
+  it('does not echo FINNY_UPSTREAM_URL or token in body', async () => {
     const app = express();
     registerReadyRoute(
       app,

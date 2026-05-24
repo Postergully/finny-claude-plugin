@@ -1,19 +1,19 @@
 ---
 name: finance:variance-analysis
-description: Variance analysis between two periods, two entities, or actual vs budget. Maps to open-string intent `variance_analysis`. User invocation: /lolly:finance:variance-analysis [scope]
+description: Variance analysis between two periods, two entities, or actual vs budget. Maps to open-string intent `variance_analysis`. User invocation: /finny:finance:variance-analysis [scope]
 argument-hint: "[base period] [comparison period] [entity] (optional — decomposer will ask if missing)"
 ---
 
-# /lolly:finance:variance-analysis
+# /finny:finance:variance-analysis
 
 Compare two NetSuite financial states (period-over-period, entity-over-entity,
 or actual vs budget) and surface significant variances with explanations from
-Lolly's brain.
+Finny's brain.
 
 ## Routing
 
 This command maps to the OPEN-STRING intent `variance_analysis`. NOT in the
-bridge bless-list — passes through to Lolly. Hand off to `intent-decomposer`
+bridge bless-list — passes through to Finny. Hand off to `intent-decomposer`
 with:
 
 - `intent: 'variance_analysis'`

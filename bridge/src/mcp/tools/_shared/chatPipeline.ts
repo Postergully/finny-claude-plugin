@@ -1,14 +1,14 @@
 // Chat + parse + correction-retry pipeline, extracted from M2's sync
-// lolly_query handler. Consumed by:
-//   - `lolly_query` (post-M3 async wrapper)
+// finny_query handler. Consumed by:
+//   - `finny_query` (post-M3 async wrapper)
 //   - The background task worker (drains taskManager pending chat tasks)
-//   - `lolly_report` (M3 Task 4, delegates preamble→runQuery)
+//   - `finny_report` (M3 Task 4, delegates preamble→runQuery)
 //
 // Keep `chat()` module-local; only `runQuery` is exported.
 
-import { OpenClawClient } from '../../../openclaw/client.js';
-import { LollyEnvelopeSchema, type LollyEnvelope } from '../../../types/envelope.js';
-import { DEFAULT_OPENCLAW_URL, DEFAULT_MODEL } from '../../../config/constants.js';
+import { HermesClient } from '../../../hermes/client.js';
+import { FinnyEnvelopeSchema, type FinnyEnvelope } from '../../../types/envelope.js';
+import { DEFAULT_FINNY_UPSTREAM_URL, DEFAULT_MODEL } from '../../../config/constants.js';
 import type { BlessListEntry } from '../../../intents/types.js';
 import { buildQuerySystemPrompt } from './systemPrompt.js';
 import { extractEnvelopeJSON, buildCorrectionPrompt } from './parseEnvelope.js';
@@ -44,15 +44,15 @@ export interface RunQueryParams {
 }
 
 function getGatewayUrl(): string {
-  return process.env.OPENCLAW_URL || DEFAULT_OPENCLAW_URL;
+  return process.env.FINNY_UPSTREAM_URL || DEFAULT_FINNY_UPSTREAM_URL;
 }
 
 function getGatewayToken(): string | undefined {
-  return process.env.LOLLY_GATEWAY_TOKEN || process.env.OPENCLAW_GATEWAY_TOKEN;
+  return process.env.FINNY_GATEWAY_TOKEN || process.env.FINNY_UPSTREAM_TOKEN;
 }
 
 function getModel(): string {
-  return process.env.OPENCLAW_MODEL || DEFAULT_MODEL;
+  return process.env.FINNY_MODEL || DEFAULT_MODEL;
 }
 
 async function chat(params: {
@@ -64,7 +64,7 @@ async function chat(params: {
   const url = getGatewayUrl();
   const token = getGatewayToken();
   const model = getModel();
-  const client = new OpenClawClient(url, token, params.deadlineMs, model);
+  const client = new HermesClient(url, token, params.deadlineMs, model);
 
   const combined = `${params.systemPrompt}\n\n---\n\n${params.userMessage}`;
   const started = Date.now();
@@ -100,7 +100,7 @@ async function chat(params: {
   }
 }
 
-export async function runQuery(params: RunQueryParams): Promise<LollyEnvelope> {
+export async function runQuery(params: RunQueryParams): Promise<FinnyEnvelope> {
   const envUsed: 'sandbox' | 'production' = params.entity_hints?.env ?? 'production';
   const started = Date.now();
   const sessionId = getOrCreateSession(params.sessionPrincipal);
@@ -142,12 +142,12 @@ export async function runQuery(params: RunQueryParams): Promise<LollyEnvelope> {
   // First-pass parse
   const parsedFirst = extractEnvelopeJSON(rawFirst);
   if (parsedFirst !== null) {
-    const validation = LollyEnvelopeSchema.safeParse({
+    const validation = FinnyEnvelopeSchema.safeParse({
       ...(parsedFirst as object),
       elapsed_ms: Date.now() - started,
       env_used: envUsed,
       bridge_version: BRIDGE_VERSION,
-      lolly_session_id: sessionId,
+      finny_session_id: sessionId,
     });
     if (validation.success) {
       return finalizeEnvelope(validation.data, params);
@@ -162,12 +162,12 @@ export async function runQuery(params: RunQueryParams): Promise<LollyEnvelope> {
       });
       const parsedSecond = extractEnvelopeJSON(correction.content);
       if (parsedSecond !== null) {
-        const validation2 = LollyEnvelopeSchema.safeParse({
+        const validation2 = FinnyEnvelopeSchema.safeParse({
           ...(parsedSecond as object),
           elapsed_ms: Date.now() - started,
           env_used: envUsed,
           bridge_version: BRIDGE_VERSION,
-          lolly_session_id: sessionId,
+          finny_session_id: sessionId,
         });
         if (validation2.success) return finalizeEnvelope(validation2.data, params);
         return errorEnvelope({
@@ -213,12 +213,12 @@ export async function runQuery(params: RunQueryParams): Promise<LollyEnvelope> {
     });
     const parsedSecond = extractEnvelopeJSON(correction.content);
     if (parsedSecond !== null) {
-      const validation = LollyEnvelopeSchema.safeParse({
+      const validation = FinnyEnvelopeSchema.safeParse({
         ...(parsedSecond as object),
         elapsed_ms: Date.now() - started,
         env_used: envUsed,
         bridge_version: BRIDGE_VERSION,
-        lolly_session_id: sessionId,
+        finny_session_id: sessionId,
       });
       if (validation.success) return finalizeEnvelope(validation.data, params);
       return errorEnvelope({
@@ -252,18 +252,18 @@ export async function runQuery(params: RunQueryParams): Promise<LollyEnvelope> {
   });
 }
 
-// When Lolly returns status: 'needs_input', the bridge owns the
-// conversation lifecycle. Lolly may emit needs_input.question (and
+// When Finny returns status: 'needs_input', the bridge owns the
+// conversation lifecycle. Finny may emit needs_input.question (and
 // optionally options) but doesn't know the conversation_id or round —
 // those are the bridge's bookkeeping. This helper allocates a
 // conversation_id, stores the original RunQuery context, and patches
-// the envelope so cowork can immediately call lolly_continue.
+// the envelope so cowork can immediately call finny_continue.
 //
-// The bridge ALSO accepts envelopes where Lolly already filled in a
-// conversation_id (defensive — older Lolly prompts may include it). In
+// The bridge ALSO accepts envelopes where Finny already filled in a
+// conversation_id (defensive — older Finny prompts may include it). In
 // that case we still re-key with our own id to keep the store
-// authoritative; Lolly's id is discarded.
-function maybeRegisterNeedsInput(env: LollyEnvelope, params: RunQueryParams): LollyEnvelope {
+// authoritative; Finny's id is discarded.
+function maybeRegisterNeedsInput(env: FinnyEnvelope, params: RunQueryParams): FinnyEnvelope {
   if (env.status !== 'needs_input' || !env.needs_input) return env;
 
   const conversationId = createConversation({
@@ -288,15 +288,15 @@ function maybeRegisterNeedsInput(env: LollyEnvelope, params: RunQueryParams): Lo
 
 // Track G: Discover phase violation detection.
 //
-// When Lolly probes NetSuite during phase: 'discover' (despite the prompt
+// When Finny probes NetSuite during phase: 'discover' (despite the prompt
 // telling her not to), the symptom is sources[] entries with kind 'suiteql'
 // or 'rest'. Brain reads have kind 'memory' or 'skill', so non-brain
 // sources during discover = a real violation. We log to the bridge log and
 // annotate confidence_reason — we do NOT strip the sources or reject the
-// envelope, because (a) doing so could hide useful data Lolly already
+// envelope, because (a) doing so could hide useful data Finny already
 // produced and (b) the warning lets us measure violation rate via
 // access-log analysis and tighten further if needed. See spec §3.3.
-function detectDiscoverViolation(env: LollyEnvelope, params: RunQueryParams): boolean {
+function detectDiscoverViolation(env: FinnyEnvelope, params: RunQueryParams): boolean {
   if (params.phase !== 'discover') return false;
   if (!env.sources || env.sources.length === 0) return false;
   return env.sources.some((s) => s.kind === 'suiteql' || s.kind === 'rest');
@@ -306,7 +306,7 @@ function detectDiscoverViolation(env: LollyEnvelope, params: RunQueryParams): bo
 // surfacing first, then needs_input registration. Runs at every successful
 // validation point in runQuery (initial parse, post-correction parse,
 // post-correction-with-no-JSON parse).
-function finalizeEnvelope(env: LollyEnvelope, params: RunQueryParams): LollyEnvelope {
+function finalizeEnvelope(env: FinnyEnvelope, params: RunQueryParams): FinnyEnvelope {
   if (detectDiscoverViolation(env, params)) {
     const offendingKinds = env.sources
       .filter((s) => s.kind === 'suiteql' || s.kind === 'rest')
@@ -315,7 +315,7 @@ function finalizeEnvelope(env: LollyEnvelope, params: RunQueryParams): LollyEnve
     log(
       `[discover_violation] intent="${params.intent_string ?? '<none>'}" sources=${offendingKinds} — discover phase ran live NetSuite probes (UX latency penalty)`
     );
-    const annotated: LollyEnvelope = {
+    const annotated: FinnyEnvelope = {
       ...env,
       confidence_reason: `${env.confidence_reason} [bridge: discover phase ran live NetSuite queries — see bridge log for discover_violation]`,
     };

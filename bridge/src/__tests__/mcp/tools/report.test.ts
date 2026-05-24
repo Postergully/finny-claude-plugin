@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { reportTool } from '../../../mcp/tools/report.js';
 import { taskManager } from '../../../mcp/tasks/manager.js';
 import { REPORT_REGISTRY, type ReportDef } from '../../../mcp/tools/_shared/reportRegistry.js';
-import { LollyEnvelopeSchema, type LollyEnvelope } from '../../../types/envelope.js';
+import { FinnyEnvelopeSchema, type FinnyEnvelope } from '../../../types/envelope.js';
 
 const REPORT_NAMES = [
   'vendor_balance',
@@ -13,7 +13,7 @@ const REPORT_NAMES = [
   'po_status',
 ] as const;
 
-function makeStoredEnvelope(intent: string): LollyEnvelope {
+function makeStoredEnvelope(intent: string): FinnyEnvelope {
   return {
     status: 'ok',
     intent_restated: intent,
@@ -26,7 +26,7 @@ function makeStoredEnvelope(intent: string): LollyEnvelope {
     elapsed_ms: 10,
     env_used: 'production',
     bridge_version: '0.0.1',
-    lolly_session_id: 'sess-report-test',
+    finny_session_id: 'sess-report-test',
   };
 }
 
@@ -58,7 +58,7 @@ describe('REPORT_REGISTRY', () => {
   }
 });
 
-describe('lolly_report — live handler (Task 4)', () => {
+describe('finny_report — live handler (Task 4)', () => {
   beforeEach(() => {
     for (const t of taskManager.list()) {
       taskManager.delete(t.id);
@@ -77,7 +77,7 @@ describe('lolly_report — live handler (Task 4)', () => {
     expect(res.error?.retryable).toBe(false);
     expect(res.error?.message).toContain('vendor_balance');
     expect(res.error?.message).toContain('vendor_name');
-    expect(LollyEnvelopeSchema.safeParse(res).success).toBe(true);
+    expect(FinnyEnvelopeSchema.safeParse(res).success).toBe(true);
   });
 
   it('missing multiple required params lists them all', async () => {
@@ -127,7 +127,7 @@ describe('lolly_report — live handler (Task 4)', () => {
         deadline_ms: 2000,
       });
       expect(res).toEqual(stored);
-      expect(LollyEnvelopeSchema.safeParse(res).success).toBe(true);
+      expect(FinnyEnvelopeSchema.safeParse(res).success).toBe(true);
     } finally {
       (taskManager as unknown as { create: typeof originalCreate }).create = originalCreate;
     }
@@ -164,7 +164,7 @@ describe('lolly_report — live handler (Task 4)', () => {
       if (res.data?.shape === 'scalar') {
         expect(res.data.value).toBe(res.task_id);
       }
-      expect(LollyEnvelopeSchema.safeParse(res).success).toBe(true);
+      expect(FinnyEnvelopeSchema.safeParse(res).success).toBe(true);
     } finally {
       (taskManager as unknown as { create: typeof originalCreate }).create = originalCreate;
     }

@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { taskStatusTool } from '../../../mcp/tools/taskStatus.js';
 import { taskManager } from '../../../mcp/tasks/manager.js';
-import { LollyEnvelopeSchema, type LollyEnvelope } from '../../../types/envelope.js';
+import { FinnyEnvelopeSchema, type FinnyEnvelope } from '../../../types/envelope.js';
 
-function makeStoredEnvelope(): LollyEnvelope {
+function makeStoredEnvelope(): FinnyEnvelope {
   return {
     status: 'ok',
     intent_restated: 'stored answer',
@@ -16,11 +16,11 @@ function makeStoredEnvelope(): LollyEnvelope {
     elapsed_ms: 1234,
     env_used: 'production',
     bridge_version: '0.0.1',
-    lolly_session_id: 'sess-stored',
+    finny_session_id: 'sess-stored',
   };
 }
 
-describe('lolly_task_status — live handler (Task 3)', () => {
+describe('finny_task_status — live handler (Task 3)', () => {
   beforeEach(() => {
     // Best-effort cleanup of any tasks from prior tests.
     for (const t of taskManager.list()) {
@@ -34,7 +34,7 @@ describe('lolly_task_status — live handler (Task 3)', () => {
     expect(res.error?.code).toBe('internal');
     expect(res.error?.retryable).toBe(false);
     expect(res.error?.message).toContain('task_does_not_exist');
-    expect(LollyEnvelopeSchema.safeParse(res).success).toBe(true);
+    expect(FinnyEnvelopeSchema.safeParse(res).success).toBe(true);
   });
 
   it('running task → status:"running" with elapsed_ms measured from startedAt', async () => {
@@ -52,11 +52,11 @@ describe('lolly_task_status — live handler (Task 3)', () => {
     expect(res.status).toBe('running');
     expect(res.task_id).toBe(task.id);
     expect(res.elapsed_ms).toBeGreaterThanOrEqual(0);
-    expect(res.lolly_session_id).toBe('sess-run');
+    expect(res.finny_session_id).toBe('sess-run');
     if (res.data?.shape === 'scalar') {
       expect(res.data.value).toBe(task.id);
     }
-    expect(LollyEnvelopeSchema.safeParse(res).success).toBe(true);
+    expect(FinnyEnvelopeSchema.safeParse(res).success).toBe(true);
   });
 
   it('completed task → stored envelope returned verbatim (passthrough, no re-stamp)', async () => {
@@ -72,7 +72,7 @@ describe('lolly_task_status — live handler (Task 3)', () => {
     expect(res).toEqual(stored);
     // Operational fields preserved exactly — not re-stamped.
     expect(res.elapsed_ms).toBe(1234);
-    expect(res.lolly_session_id).toBe('sess-stored');
+    expect(res.finny_session_id).toBe('sess-stored');
   });
 
   it('failed task → status:"error", retryable, error message from task.error', async () => {
@@ -88,8 +88,8 @@ describe('lolly_task_status — live handler (Task 3)', () => {
     expect(res.error?.code).toBe('internal');
     expect(res.error?.message).toBe('worker exploded');
     expect(res.error?.retryable).toBe(true);
-    expect(res.lolly_session_id).toBe('sess-fail');
-    expect(LollyEnvelopeSchema.safeParse(res).success).toBe(true);
+    expect(res.finny_session_id).toBe('sess-fail');
+    expect(FinnyEnvelopeSchema.safeParse(res).success).toBe(true);
   });
 
   it('cancelled task → status:"refused"', async () => {
@@ -103,7 +103,7 @@ describe('lolly_task_status — live handler (Task 3)', () => {
     const res = await taskStatusTool.handler({ task_id: task.id });
     expect(res.status).toBe('refused');
     expect(res.confidence_reason).toContain('cancelled');
-    expect(res.lolly_session_id).toBe('sess-cancel');
-    expect(LollyEnvelopeSchema.safeParse(res).success).toBe(true);
+    expect(res.finny_session_id).toBe('sess-cancel');
+    expect(FinnyEnvelopeSchema.safeParse(res).success).toBe(true);
   });
 });

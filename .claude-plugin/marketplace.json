@@ -1,13 +1,13 @@
 {
-  "name": "postergully-lolly-claude-plugin",
+  "name": "postergully-finny-claude-plugin",
   "owner": {
     "name": "Postergully"
   },
   "plugins": [
     {
-      "name": "lolly",
+      "name": "finny",
       "source": "./plugin",
-      "description": "Lolly NetSuite agent — cowork-side discipline plugin"
+      "description": "Finny NetSuite agent — cowork-side discipline plugin"
     }
   ]
 }

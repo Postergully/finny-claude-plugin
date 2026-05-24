@@ -1,8 +1,8 @@
 {
-  "name": "lolly-claude-plugin",
+  "name": "finny-claude-plugin",
   "version": "0.0.1",
   "private": true,
-  "description": "Claude cowork plugin packaging the Lolly ERP agent as 4 semantic MCP tools with envelope-validated intent-vs-output judging.",
+  "description": "Claude cowork plugin packaging the Finny ERP agent as 4 semantic MCP tools with envelope-validated intent-vs-output judging.",
   "license": "MIT",
   "scripts": {
     "build": "pnpm -r build",

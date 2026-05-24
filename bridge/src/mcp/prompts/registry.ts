@@ -27,18 +27,18 @@ function loadSkillBody(key: string): string {
 }
 
 export const PROMPT_REGISTRY: Record<string, PromptDef> = {
-  lolly_usage: {
-    name: 'lolly_usage',
+  finny_usage: {
+    name: 'finny_usage',
     description:
-      'How to decide when to call Lolly and which lolly_* tool to pick. Load on connect for any harness using the bridge.',
+      'How to decide when to call Finny and which finny_* tool to pick. Load on connect for any harness using the bridge.',
     arguments: [],
-    build: () => loadSkillBody('lolly_usage'),
+    build: () => loadSkillBody('finny_usage'),
   },
-  lolly_judging: {
-    name: 'lolly_judging',
+  finny_judging: {
+    name: 'finny_judging',
     description:
-      'How to read a Lolly envelope and decide trust/retry/surface. Load after every lolly_* tool call.',
+      'How to read a Finny envelope and decide trust/retry/surface. Load after every finny_* tool call.',
     arguments: [],
-    build: () => loadSkillBody('lolly_judging'),
+    build: () => loadSkillBody('finny_judging'),
   },
 };

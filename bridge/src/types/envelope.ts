@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 // Track O (2026-05-15): data interiors + sources + needs_input options use
-// .passthrough() so Lolly's natural extras (data.summary, column hints, etc.)
-// flow through. Treat passthrough fields as UNTRUSTED Lolly output: cowork
+// .passthrough() so Finny's natural extras (data.summary, column hints, etc.)
+// flow through. Treat passthrough fields as UNTRUSTED Finny output: cowork
 // must JSON-serialize for rendering — never eval, template-inject, or
 // shell-interpolate. BaseEnvelope + ErrorSchema stay strict (wire contract).
 const SourceSchema = z
@@ -24,7 +24,7 @@ const DataScalar = z
 const DataRows = z
   .object({
     shape: z.literal('rows'),
-    // Lolly's natural emission is bare strings: ["p1_category", "p2_bucket", ...].
+    // Finny's natural emission is bare strings: ["p1_category", "p2_bucket", ...].
     // Schema also accepts the structured form [{name, type}, ...]. Passthrough
     // on the structured form so {nullable, precision, width, ...} hints ride.
     // .min(1) still enforces presence (catches missing-key typos).
@@ -51,20 +51,20 @@ const DataSchema = z.discriminatedUnion('shape', [DataScalar, DataRows, DataNarr
 //
 // Split per §10.3: the first 7 values are bridge/gateway *infrastructure*
 // failure modes — closed + exhaustive so skills can match-branch on them.
-// `'other'` is the escape valve for agent-semantic self-reports Lolly emits
+// `'other'` is the escape valve for agent-semantic self-reports Finny emits
 // (e.g. `approval_required`, `needs_clarification`) that aren't infra
 // failures. The specific semantic code rides in `error.message`; the
 // `judging-output` skill parses the message on the `'other'` branch.
-// Without this escape valve, Lolly's semantic codes trip the Zod enum,
+// Without this escape valve, Finny's semantic codes trip the Zod enum,
 // triggering a correction retry that re-fails and masks the signal as
 // `envelope_parse_failed` — destroying the drift fixture from M2.
 const ErrorCodeSchema = z.enum([
   'envelope_parse_failed',
-  'gateway_rejected', // HTTP 4xx from the OpenClaw gateway
+  'gateway_rejected', // HTTP 4xx from the Hermes gateway
   'gateway_unreachable', // network error / DNS / connection refused
   'timeout', // deadline_ms exceeded on sync path
   'unauthorized', // 401 from the gateway
-  'refused', // Lolly refused the task (policy / safety)
+  'refused', // Finny refused the task (policy / safety)
   'internal', // catch-all for unexpected bridge errors
   'wrong_tool', // execute-phase scope missing required vars; caller should re-call with phase: 'discover'
   'other', // agent-semantic self-report; specific code in error.message (§10.3)
@@ -78,10 +78,10 @@ const ErrorSchema = z.object({
 
 const StatusSchema = z.enum(['ok', 'partial', 'refused', 'error', 'running', 'needs_input']);
 
-// Track F: when execute-phase Lolly hits residual ambiguity that resolved
+// Track F: when execute-phase Finny hits residual ambiguity that resolved
 // scope didn't cover (e.g. 3 vendors named "Acme"), she returns
 // status: 'needs_input' carrying a question + optional finite-set options +
-// a conversation_id cowork uses to call lolly_continue. round is the
+// a conversation_id cowork uses to call finny_continue. round is the
 // 1-indexed clarification turn — the bridge caps at 3 to prevent infinite
 // loops and forces a `partial` envelope after that.
 const NeedsInputSchema = z.object({
@@ -105,18 +105,18 @@ const BaseEnvelope = z.object({
   error: ErrorSchema.optional(),
   task_id: z.string().optional(),
   needs_input: NeedsInputSchema.optional(),
-  // Track S: progress strings on running envelopes. Lolly emits via
-  // lolly_progress(text) during long execute phases; the bridge writes
-  // them to the task record; lolly_task_status surfaces the latest on
+  // Track S: progress strings on running envelopes. Finny emits via
+  // finny_progress(text) during long execute phases; the bridge writes
+  // them to the task record; finny_task_status surfaces the latest on
   // each poll. Optional + max 500 chars to bound payload size.
   progress: z.string().max(500).optional(),
   elapsed_ms: z.number().int().nonnegative(),
   env_used: z.enum(['sandbox', 'production']),
   bridge_version: z.string(),
-  lolly_session_id: z.string(),
+  finny_session_id: z.string(),
 });
 
-export const LollyEnvelopeSchema = BaseEnvelope.superRefine((env, ctx) => {
+export const FinnyEnvelopeSchema = BaseEnvelope.superRefine((env, ctx) => {
   // status=ok / partial → data must be present
   if ((env.status === 'ok' || env.status === 'partial') && env.data === null) {
     ctx.addIssue({
@@ -160,4 +160,4 @@ export const LollyEnvelopeSchema = BaseEnvelope.superRefine((env, ctx) => {
   }
 });
 
-export type LollyEnvelope = z.infer<typeof LollyEnvelopeSchema>;
+export type FinnyEnvelope = z.infer<typeof FinnyEnvelopeSchema>;

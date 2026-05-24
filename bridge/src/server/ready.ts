@@ -1,7 +1,7 @@
 /**
  * GET /ready — deep readiness probe for the bridge.
  *
- * Returns 200 if the bridge can reach openclaw's /v1/models endpoint
+ * Returns 200 if the bridge can reach hermes's /v1/models endpoint
  * (HEAD, 1s timeout), 503 otherwise. Used by the ALB health check
  * to gate traffic.
  *
@@ -9,12 +9,12 @@
  * bridge process is up, which lied throughout the D4 spiral. /ready
  * exercises the full bridge → tunnel → gateway path.
  *
- * Response body intentionally omits OPENCLAW_URL, tokens, headers,
+ * Response body intentionally omits FINNY_UPSTREAM_URL, tokens, headers,
  * and any topology details that could leak through public ALB.
  */
 
 import type { Express, Request, Response } from 'express';
-import type { InstanceRegistry } from '../openclaw/registry.js';
+import type { InstanceRegistry } from '../hermes/registry.js';
 
 export function registerReadyRoute(app: Express, registry: InstanceRegistry): void {
   app.get('/ready', async (_req: Request, res: Response) => {
@@ -24,7 +24,7 @@ export function registerReadyRoute(app: Express, registry: InstanceRegistry): vo
     if (result.ok) {
       res.status(200).json({
         ok: true,
-        openclaw: 'reachable',
+        hermes: 'reachable',
         latency_ms: result.latencyMs,
       });
       return;
@@ -32,7 +32,7 @@ export function registerReadyRoute(app: Express, registry: InstanceRegistry): vo
 
     res.status(503).json({
       ok: false,
-      openclaw: 'unreachable',
+      hermes: 'unreachable',
       error: result.error ?? 'unknown',
       latency_ms: result.latencyMs,
     });

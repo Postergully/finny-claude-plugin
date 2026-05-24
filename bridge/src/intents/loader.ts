@@ -68,7 +68,7 @@ export function loadBlessList(): LoadedBlessList {
 }
 
 // Returns null when intent is not blessed. Caller treats null as "open string"
-// and routes to Lolly without scope validation.
+// and routes to Finny without scope validation.
 export function lookupIntent(id: string | undefined): BlessListEntry | null {
   if (!id) return null;
   const { byId, byAlias } = loadBlessList();

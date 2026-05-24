@@ -16,6 +16,6 @@ while (Date.now() - start < maxMs) {
   if (env.status !== 'running') break;
   await new Promise((r) => setTimeout(r, 3000));
 }
-const safe = { ...env, lolly_session_id: 'redacted', bridge_version: 'redacted' };
+const safe = { ...env, finny_session_id: 'redacted', bridge_version: 'redacted' };
 writeFileSync(`__tests__/fixtures/${name}.json`, JSON.stringify(safe, null, 2) + '\n');
 console.log(`wrote fixtures/${name}.json (status=${env.status})`);

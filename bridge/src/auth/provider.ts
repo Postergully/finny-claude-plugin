@@ -1,5 +1,5 @@
 /**
- * MCP OAuth Server Provider for OpenClaw
+ * MCP OAuth Server Provider for Hermes
  *
  * Implements OAuthServerProvider from the MCP SDK to provide
  * a full OAuth 2.1 flow (authorization code + PKCE) that
@@ -97,7 +97,7 @@ const ALLOW_ANY_REDIRECT: string[] = new Proxy([] as string[], {
  */
 const MAX_DYNAMIC_CLIENTS = 100;
 
-export class OpenClawClientsStore implements OAuthRegisteredClientsStore {
+export class HermesClientsStore implements OAuthRegisteredClientsStore {
   private client: OAuthClientInformationFull | undefined;
   private dynamicClients = new Map<string, OAuthClientInformationFull>();
 
@@ -123,7 +123,7 @@ export class OpenClawClientsStore implements OAuthRegisteredClientsStore {
         token_endpoint_auth_method: 'client_secret_post',
         grant_types: ['authorization_code', 'refresh_token'],
         response_types: ['code'],
-        client_name: 'OpenClaw MCP Client',
+        client_name: 'Hermes MCP Client',
         client_id_issued_at: Math.floor(Date.now() / 1000),
       };
     }
@@ -155,13 +155,13 @@ export class OpenClawClientsStore implements OAuthRegisteredClientsStore {
 // --- Auth Provider ---
 
 /**
- * OAuth server provider for OpenClaw MCP.
+ * OAuth server provider for Hermes MCP.
  *
  * Auto-approves authorization requests (no consent screen) since this
  * is a single-purpose MCP server where the user already controls credentials.
  */
-export class OpenClawAuthProvider implements OAuthServerProvider {
-  readonly clientsStore: OpenClawClientsStore;
+export class HermesAuthProvider implements OAuthServerProvider {
+  readonly clientsStore: HermesClientsStore;
 
   private codes = new Map<string, CodeData>();
   private tokens = new Map<string, TokenData>();
@@ -172,7 +172,7 @@ export class OpenClawAuthProvider implements OAuthServerProvider {
   private reaperInterval: ReturnType<typeof setInterval> | undefined;
 
   constructor(config: AuthProviderConfig) {
-    this.clientsStore = new OpenClawClientsStore(config);
+    this.clientsStore = new HermesClientsStore(config);
     this.reaperInterval = setInterval(() => this.reapExpired(), REAPER_INTERVAL_MS);
     // Allow process to exit without waiting for the reaper
     if (this.reaperInterval.unref) {

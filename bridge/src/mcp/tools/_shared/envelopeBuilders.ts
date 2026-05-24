@@ -4,7 +4,7 @@
 // rewrite can emit `runningEnvelope` without duplicating shape logic.
 // Tasks 3 (taskStatus), 4 (report), 5 (executeSuiteQL) also consume.
 
-import type { LollyEnvelope } from '../../../types/envelope.js';
+import type { FinnyEnvelope } from '../../../types/envelope.js';
 
 const BRIDGE_VERSION = '0.0.1';
 
@@ -29,7 +29,7 @@ export interface ErrorEnvelopeParams {
   intentRestated?: string;
 }
 
-export function errorEnvelope(params: ErrorEnvelopeParams): LollyEnvelope {
+export function errorEnvelope(params: ErrorEnvelopeParams): FinnyEnvelope {
   return {
     status: 'error',
     intent_restated: params.intentRestated ?? 'unable to process query',
@@ -47,7 +47,7 @@ export function errorEnvelope(params: ErrorEnvelopeParams): LollyEnvelope {
     elapsed_ms: params.elapsedMs,
     env_used: params.envUsed,
     bridge_version: BRIDGE_VERSION,
-    lolly_session_id: params.sessionId,
+    finny_session_id: params.sessionId,
   };
 }
 
@@ -60,20 +60,20 @@ export interface RunningEnvelopeParams {
   deadlineExceededMs?: number;
   // Track S: latest progress string from the in-flight task (if any).
   // Surfaced on the running envelope so cowork can render
-  // "Lolly is: <progress>" between polls. Optional; when absent the
+  // "Finny is: <progress>" between polls. Optional; when absent the
   // judging-output skill leaves the user-visible status unchanged.
   progress?: string;
 }
 
 /**
  * Emit an envelope with `status: 'running'`. The canonical `task_id` lives
- * in `data.value.task_id` (per §2.4 design — `lolly_task_status` reads it
+ * in `data.value.task_id` (per §2.4 design — `finny_task_status` reads it
  * from there). We also populate the pre-existing top-level `task_id` field
- * because `LollyEnvelopeSchema.superRefine` requires it when
+ * because `FinnyEnvelopeSchema.superRefine` requires it when
  * `status === 'running'`. Both point at the same value; `data.value` is
  * the contract-authoritative location, top-level is validation plumbing.
  */
-export function runningEnvelope(params: RunningEnvelopeParams): LollyEnvelope {
+export function runningEnvelope(params: RunningEnvelopeParams): FinnyEnvelope {
   return {
     status: 'running',
     intent_restated: params.intentRestated,
@@ -93,13 +93,13 @@ export function runningEnvelope(params: RunningEnvelopeParams): LollyEnvelope {
     },
     sources: [],
     confidence: 'low',
-    confidence_reason: 'Task still running — poll with lolly_task_status using data.value.task_id',
+    confidence_reason: 'Task still running — poll with finny_task_status using data.value.task_id',
     task_id: params.taskId,
     ...(params.progress ? { progress: params.progress } : {}),
     elapsed_ms: params.elapsedMs,
     env_used: params.envUsed,
     bridge_version: BRIDGE_VERSION,
-    lolly_session_id: params.sessionId,
+    finny_session_id: params.sessionId,
   };
 }
 
@@ -111,7 +111,7 @@ export interface RefusedEnvelopeParams {
   sessionId: string;
   /**
    * Optional confidence override. Default `'low'` fits refusals that may be
-   * probabilistic (Lolly herself refusing). Bridge-side deterministic guards
+   * probabilistic (Finny herself refusing). Bridge-side deterministic guards
    * (SuiteQL write-verb, destructive-intent) should pass `'high'` — the
    * decision is made by a regex on the caller's input, not by any
    * probabilistic layer, so the judge should trust it absolutely and not
@@ -120,7 +120,7 @@ export interface RefusedEnvelopeParams {
   confidence?: 'low' | 'medium' | 'high';
 }
 
-export function refusedEnvelope(params: RefusedEnvelopeParams): LollyEnvelope {
+export function refusedEnvelope(params: RefusedEnvelopeParams): FinnyEnvelope {
   return {
     status: 'refused',
     intent_restated: params.intentRestated,
@@ -133,6 +133,6 @@ export function refusedEnvelope(params: RefusedEnvelopeParams): LollyEnvelope {
     elapsed_ms: params.elapsedMs,
     env_used: params.envUsed,
     bridge_version: BRIDGE_VERSION,
-    lolly_session_id: params.sessionId,
+    finny_session_id: params.sessionId,
   };
 }

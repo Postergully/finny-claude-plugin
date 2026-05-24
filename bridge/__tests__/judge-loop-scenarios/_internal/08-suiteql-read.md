@@ -4,7 +4,7 @@
 User supplies raw SuiteQL for an ad-hoc count query.
 
 ## Expected tool
-`lolly_executeSuiteQL` — read-only raw SQL path.
+`finny_executeSuiteQL` — read-only raw SQL path.
 
 ## Tool input
 ```json
@@ -25,7 +25,7 @@ User supplies raw SuiteQL for an ad-hoc count query.
 
 ## Drift variants
 - **wrong-shape**: returns `scalar` instead of `rows` → judge catches (executeSuiteQL contract is rows)
-- **rows-rewritten**: Lolly reformats row values (adds currency symbols, etc.) → never-reformat violation
+- **rows-rewritten**: Finny reformats row values (adds currency symbols, etc.) → never-reformat violation
 - **no-source-echo**: `sources[]` empty despite a SQL being executed → judge surfaces (audit trail missing)
 
 ## Never-reformat checks

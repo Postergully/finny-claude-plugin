@@ -48,7 +48,7 @@ describe('bless-list — seed file', () => {
     expect(a).toBe(b);
   });
 
-  it("seed entries have NO discovery_prompt field — discovery is Lolly's job", () => {
+  it("seed entries have NO discovery_prompt field — discovery is Finny's job", () => {
     for (const id of listBlessedIds()) {
       const entry = lookupIntent(id) as unknown as Record<string, unknown>;
       expect(entry.discovery_prompt).toBeUndefined();

@@ -2,22 +2,22 @@
 
 ## Overview
 
-The MCP server logs operational events to **stderr** using the `[openclaw-mcp]` prefix. Stderr is used (instead of stdout) because the stdio MCP transport uses stdout for protocol messages.
+The MCP server logs operational events to **stderr** using the `[hermes-mcp]` prefix. Stderr is used (instead of stdout) because the stdio MCP transport uses stdout for protocol messages.
 
 ## Log Levels
 
 | Level | Prefix | When |
 |-------|--------|------|
-| Info | `[openclaw-mcp]` | Normal operations — startup, connections, shutdown |
-| Error | `[openclaw-mcp] ERROR:` | Failures — connection errors, invalid config, fatal errors |
-| Debug | `[openclaw-mcp] DEBUG:` | Verbose output — only when `DEBUG=true` or `NODE_ENV=development` |
+| Info | `[hermes-mcp]` | Normal operations — startup, connections, shutdown |
+| Error | `[hermes-mcp] ERROR:` | Failures — connection errors, invalid config, fatal errors |
+| Debug | `[hermes-mcp] DEBUG:` | Verbose output — only when `DEBUG=true` or `NODE_ENV=development` |
 
 ## What Gets Logged
 
 ### Startup
 
 - Server name and version
-- OpenClaw gateway URL (host only, no tokens)
+- Hermes gateway URL (host only, no tokens)
 - Transport type (stdio or SSE)
 - Whether a gateway token is configured (yes/no, not the token itself)
 - OAuth client ID (when auth is enabled)
@@ -38,7 +38,7 @@ The MCP server logs operational events to **stderr** using the `[openclaw-mcp]` 
 
 ### What Is NOT Logged (Info/Error levels)
 
-- **Message content** — user messages and OpenClaw responses are never logged
+- **Message content** — user messages and Hermes responses are never logged
 - **Authentication tokens** — Bearer tokens, client secrets, gateway tokens
 - **Request/response bodies** — only error messages, not full payloads
 - **User-identifiable information** — no IPs, user agents, or personal data
@@ -72,7 +72,7 @@ This is a safety net — the code avoids logging sensitive values in the first p
 |-----------|-------------|-------|
 | stdio | stderr | Cannot use stdout (reserved for MCP protocol) |
 | SSE/HTTP | stderr | Same format, same destination |
-| Docker | `docker logs openclaw-mcp` | stderr is captured by Docker's log driver |
+| Docker | `docker logs hermes-mcp` | stderr is captured by Docker's log driver |
 
 ## Docker Log Management
 
@@ -80,13 +80,13 @@ When running in Docker, logs are managed by the Docker log driver:
 
 ```bash
 # View logs
-docker logs openclaw-mcp
+docker logs hermes-mcp
 
 # Follow logs
-docker logs -f openclaw-mcp
+docker logs -f hermes-mcp
 
 # Last 100 lines
-docker logs --tail 100 openclaw-mcp
+docker logs --tail 100 hermes-mcp
 ```
 
 To configure log rotation in `docker-compose.yml`:

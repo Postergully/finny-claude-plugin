@@ -4,7 +4,7 @@
 What is the current open balance for vendor "Acme" in sandbox?
 
 ## Expected tool
-`lolly_report` — vendor_balance with env=sandbox.
+`finny_report` — vendor_balance with env=sandbox.
 
 ## Tool input
 ```json
@@ -28,5 +28,5 @@ What is the current open balance for vendor "Acme" in sandbox?
 
 ## Never-reformat checks
 - `env_used` must be `"sandbox"` — exact string
-- sign applied by Lolly; judge must not re-flip
+- sign applied by Finny; judge must not re-flip
 - `data.value` passes through as-is

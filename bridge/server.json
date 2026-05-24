@@ -1,44 +1,44 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
-  "name": "io.github.freema/openclaw-mcp",
-  "description": "MCP server bridging Claude.ai/Desktop with self-hosted OpenClaw via OAuth 2.1.",
+  "name": "io.github.postergully/finny-mcp",
+  "description": "MCP server bridging Claude.ai/Desktop with self-hosted Hermes via OAuth 2.1.",
   "status": "active",
   "repository": {
-    "url": "https://github.com/freema/openclaw-mcp",
+    "url": "https://github.com/freema/hermes-mcp",
     "source": "github"
   },
   "version": "1.4.0",
-  "websiteUrl": "https://openclaw-mcp.cloud",
+  "websiteUrl": "https://hermes-mcp.cloud",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
-      "identifier": "openclaw-mcp",
+      "identifier": "hermes-mcp",
       "version": "1.4.0",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
-          "name": "OPENCLAW_URL",
-          "description": "URL of your OpenClaw gateway",
-          "default": "http://127.0.0.1:18789",
+          "name": "FINNY_UPSTREAM_URL",
+          "description": "URL of your Hermes gateway",
+          "default": "http://127.0.0.1:8642",
           "isRequired": true
         },
         {
-          "name": "OPENCLAW_GATEWAY_TOKEN",
-          "description": "Bearer token for OpenClaw gateway authentication",
+          "name": "FINNY_UPSTREAM_TOKEN",
+          "description": "Bearer token for Hermes gateway authentication",
           "isRequired": true,
           "isSecret": true
         },
         {
-          "name": "OPENCLAW_MODEL",
-          "description": "Model name for chat completions (e.g. 'openclaw' or 'openclaw/<agentId>')",
-          "default": "openclaw",
+          "name": "FINNY_MODEL",
+          "description": "Model name for chat completions (e.g. 'hermes' or 'hermes/<agentId>')",
+          "default": "hermes-agent",
           "isRequired": false
         },
         {
-          "name": "OPENCLAW_TIMEOUT_MS",
+          "name": "FINNY_TIMEOUT_MS",
           "description": "Request timeout in milliseconds",
           "default": "120000",
           "isRequired": false
@@ -47,27 +47,27 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/freema/openclaw-mcp:1.4.0",
+      "identifier": "ghcr.io/freema/hermes-mcp:1.4.0",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
-          "name": "OPENCLAW_URL",
-          "description": "URL of your OpenClaw gateway",
-          "default": "http://127.0.0.1:18789",
+          "name": "FINNY_UPSTREAM_URL",
+          "description": "URL of your Hermes gateway",
+          "default": "http://127.0.0.1:8642",
           "isRequired": true
         },
         {
-          "name": "OPENCLAW_GATEWAY_TOKEN",
-          "description": "Bearer token for OpenClaw gateway authentication",
+          "name": "FINNY_UPSTREAM_TOKEN",
+          "description": "Bearer token for Hermes gateway authentication",
           "isRequired": true,
           "isSecret": true
         },
         {
-          "name": "OPENCLAW_MODEL",
+          "name": "FINNY_MODEL",
           "description": "Model name for chat completions",
-          "default": "openclaw",
+          "default": "hermes-agent",
           "isRequired": false
         }
       ]

@@ -1,22 +1,22 @@
 /**
- * Instance Registry for multi-instance OpenClaw support.
+ * Instance Registry for multi-instance Hermes support.
  *
- * Manages named OpenClawClient instances, each pointing to a different
- * OpenClaw gateway. Supports a default instance for backward compatibility.
+ * Manages named HermesClient instances, each pointing to a different
+ * Hermes gateway. Supports a default instance for backward compatibility.
  */
 
-import { OpenClawClient } from './client.js';
+import { HermesClient } from './client.js';
 import type { InstanceConfig } from './types.js';
 
 const INSTANCE_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;
 
 export class InstanceRegistry {
-  private instances: Map<string, { config: InstanceConfig; client: OpenClawClient }> = new Map();
+  private instances: Map<string, { config: InstanceConfig; client: HermesClient }> = new Map();
   private defaultName: string;
 
   constructor(configs: InstanceConfig[], model?: string) {
     if (configs.length === 0) {
-      throw new Error('At least one OpenClaw instance must be configured');
+      throw new Error('At least one Hermes instance must be configured');
     }
 
     const names = new Set<string>();
@@ -58,7 +58,7 @@ export class InstanceRegistry {
         explicitDefault = config.name;
       }
 
-      const client = new OpenClawClient(config.url, config.token, config.timeout, model);
+      const client = new HermesClient(config.url, config.token, config.timeout, model);
       this.instances.set(config.name, { config, client });
     }
 
@@ -68,14 +68,14 @@ export class InstanceRegistry {
   /**
    * Get client by instance name. Returns undefined if not found.
    */
-  get(name: string): OpenClawClient | undefined {
+  get(name: string): HermesClient | undefined {
     return this.instances.get(name)?.client;
   }
 
   /**
    * Get the default client.
    */
-  getDefault(): OpenClawClient {
+  getDefault(): HermesClient {
     const entry = this.instances.get(this.defaultName);
     if (!entry) {
       throw new Error(`Default instance "${this.defaultName}" not found`);
@@ -94,7 +94,7 @@ export class InstanceRegistry {
    * Resolve an optional instance name to a concrete client.
    * Falls back to default when name is undefined.
    */
-  resolve(name?: string): { name: string; client: OpenClawClient } {
+  resolve(name?: string): { name: string; client: HermesClient } {
     if (!name) {
       return { name: this.defaultName, client: this.getDefault() };
     }

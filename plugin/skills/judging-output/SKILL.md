@@ -1,11 +1,11 @@
 ---
 name: judging-output
-description: Read the envelope returned by any lolly_* tool and decide whether to trust, retry, or surface to the user. Activates after every lolly_* tool call.
+description: Read the envelope returned by any finny_* tool and decide whether to trust, retry, or surface to the user. Activates after every finny_* tool call.
 ---
 
 # judging-output
 
-Every `lolly_*` tool returns an envelope. **Every** envelope — success,
+Every `finny_*` tool returns an envelope. **Every** envelope — success,
 partial, running, refused, or error — MUST pass through this judge before
 the user sees anything. This skill owns intent-drift detection, the running
 poll loop, the exhaustive `error.code` branch (including the `'other'`
@@ -21,9 +21,9 @@ a faithful restatement of what the user asked?
 - **Faithful** → proceed to Step 2.
 - **Drifted** → retry ONCE with a sharper, more explicit question. After
   that one retry, surface drift to the user with the original question and
-  Lolly's restatement side-by-side. Do not silently re-render.
+  Finny's restatement side-by-side. Do not silently re-render.
 
-Intent-drift detection is this skill's job — `lolly-usage` picks the tool,
+Intent-drift detection is this skill's job — `finny-usage` picks the tool,
 this skill validates the answer means what the user asked.
 
 ### Step 2 — Status branch
@@ -32,10 +32,10 @@ this skill validates the answer means what the user asked.
 | --- | --- |
 | `ok` | render as-is (subject to confidence check below) |
 | `partial` | render what's there AND surface `unanswered[]` |
-| `running` | poll via `lolly_task_status({task_id})` — see loop rules below |
+| `running` | poll via `finny_task_status({task_id})` — see loop rules below |
 | `refused` | surface `confidence_reason` as the refusal. Do NOT retry |
 | `error` | branch on `error.code` — see Step 3 |
-| `needs_input` | Lolly is asking back; render `needs_input.question` + `needs_input.options[]` (numbered if present); collect user response; call `lolly_continue({conversation_id, response})` — see "needs_input loop" rules below |
+| `needs_input` | Finny is asking back; render `needs_input.question` + `needs_input.options[]` (numbered if present); collect user response; call `finny_continue({conversation_id, response})` — see "needs_input loop" rules below |
 
 ### Running envelope — how to poll
 
@@ -68,8 +68,8 @@ Schedule (cumulative wait time per poll):
 | 15 | 45 s | 229 s |
 
 After 15 polls (~4 min), if still `running`, stop and surface to the
-user: "Lolly is still working on this — the query is unusually slow.
-Two options: (1) **wait longer** — Lolly may finish in another minute;
+user: "Finny is still working on this — the query is unusually slow.
+Two options: (1) **wait longer** — Finny may finish in another minute;
 (2) **narrow the scope** — specify a single subsidiary (e.g., MTPL
 standalone) which usually speeds it up significantly." Frame option 1
 as "wait longer", NOT "try again with a longer deadline" — the user
@@ -79,7 +79,7 @@ working until its 300s deadline.
 Do not loop forever. The bridge's deadline (300s) bounds task lifetime
 from above, so the cap can't run away.
 
-Real Lolly latencies (measured 2026-05-14/15, n=4 chains):
+Real Finny latencies (measured 2026-05-14/15, n=4 chains):
 - p50 ≈ 149 s
 - p90 ≈ 183 s
 
@@ -92,22 +92,22 @@ initial call.
 
 ### needs_input — how to resume
 
-When `status === 'needs_input'`, Lolly is asking cowork to clarify
+When `status === 'needs_input'`, Finny is asking cowork to clarify
 something her resolved scope didn't cover (e.g., three vendors named
 "Acme"). Read `needs_input`:
 
-- `question` — the clarification Lolly needs answered. Render verbatim.
+- `question` — the clarification Finny needs answered. Render verbatim.
 - `options` (optional) — finite-set choices. If present, render as a
   numbered list and let the user pick by number, surfacing the option
   `id` to the user only on debug; the user-facing label is `label`.
 - `conversation_id` — opaque token. Do NOT show it to the user. Pass it
-  back unchanged on the lolly_continue call.
+  back unchanged on the finny_continue call.
 - `round` — clarification turn (1-indexed). Cap is 3.
 
 Resume by calling:
 
 ```json
-lolly_continue({
+finny_continue({
   "conversation_id": "<from needs_input>",
   "response": {
     // pick ONE:
@@ -123,26 +123,26 @@ again from Step 1 — a continue can return `ok`, `partial`, `refused`,
 `error`, or another `needs_input` (up to the 3-round cap, after which
 the bridge returns `partial` with `unanswered[]` describing the loop).
 
-If lolly_continue returns `error.code: 'gateway_rejected'` with a
+If finny_continue returns `error.code: 'gateway_rejected'` with a
 message about an "unknown or expired conversation_id", the in-memory
 conversation has aged out (30-min idle eviction) or the bridge
-restarted. Restart from a fresh `lolly_query` call — do NOT retry
-lolly_continue.
+restarted. Restart from a fresh `finny_query` call — do NOT retry
+finny_continue.
 
 ### Step 3 — `error.code` branch (exhaustive)
 
 Nine codes. Branch explicitly on each — no fallthrough, no "default retry":
 
-- **`envelope_parse_failed`** — the bridge tried twice to parse Lolly's
+- **`envelope_parse_failed`** — the bridge tried twice to parse Finny's
   output as an envelope and failed both times. Infra-ish. Retry ONCE with
-  a simpler/more direct question. If it fails again, surface "Lolly had
+  a simpler/more direct question. If it fails again, surface "Finny had
   trouble structuring the response" with the `error.message` verbatim.
-- **`gateway_rejected`** — 4xx from the OpenClaw gateway. Usually not
+- **`gateway_rejected`** — 4xx from the Hermes gateway. Usually not
   user-retryable. Surface `error.message`.
 - **`gateway_unreachable`** — network/connectivity. Tell the user to retry
   in a few minutes.
 - **`timeout`** — rare on the public surface; async tools return `running`
-  instead. Offer to rephrase the question as a `lolly_query` so the async
+  instead. Offer to rephrase the question as a `finny_query` so the async
   path can absorb the wait.
 - **`unauthorized`** — gateway token revoked or expired. Surface — this
   requires user action, not an automatic retry.
@@ -159,9 +159,9 @@ Nine codes. Branch explicitly on each — no fallthrough, no "default retry":
   and full scope. Do NOT retry execute without resolving scope — the
   bridge will reject again.
 - **`other`** — agent-semantic self-report. This is the escape valve for
-  codes Lolly generates at the agent layer rather than the bridge/gateway
+  codes Finny generates at the agent layer rather than the bridge/gateway
   layer. The specific code rides in `error.message`. Parse it:
-  - `approval_required` — Lolly judged the query ambiguous or potentially
+  - `approval_required` — Finny judged the query ambiguous or potentially
     destructive. Surface her `assumptions[]` alongside the message and ask
     the user to clarify. Do NOT retry automatically.
   - `needs_clarification` — similar to `approval_required`. Surface
@@ -175,7 +175,7 @@ For any envelope with `status: 'ok'` or `status: 'partial'`:
 
 - `confidence: 'high'` → render as-is.
 - `confidence: 'medium'` → render AND append `confidence_reason` as a
-  brief note ("Lolly flagged medium confidence because: …").
+  brief note ("Finny flagged medium confidence because: …").
 - `confidence: 'low'` → render AND warn the user explicitly that
   confidence is low, surfacing `confidence_reason` as the explanation. Do
   not hide low-confidence answers.
@@ -184,8 +184,8 @@ For any envelope with `status: 'ok'` or `status: 'partial'`:
 
 This is the most-violated rule in this skill. Read carefully.
 
-When you called `lolly_query` with `phase: 'discover'`, the response is
-**your tool input**, not the user's answer. Lolly returned a
+When you called `finny_query` with `phase: 'discover'`, the response is
+**your tool input**, not the user's answer. Finny returned a
 `status: 'ok'`, `data.shape: 'narrative'` envelope describing the
 variables you need to gather, brain-derived hints, and example
 clarifying questions she suggests asking. **NEVER render this to the
@@ -193,23 +193,23 @@ user as if it were the answer.**
 
 ### What you do with a discovery envelope
 
-1. **Parse** the narrative for the variables Lolly listed (`entity`,
+1. **Parse** the narrative for the variables Finny listed (`entity`,
    `period`, `consolidated`, `env`, etc.).
 2. **Use AskUser** to ask the user the actual clarifying questions
-   (Lolly's suggested phrasings are starting points; rephrase to match
+   (Finny's suggested phrasings are starting points; rephrase to match
    your conversational style and the user's prior context).
 3. **Assemble** the resolved scope from the user's answers.
-4. **Call `lolly_query` again** with `phase: 'execute'` + the resolved
+4. **Call `finny_query` again** with `phase: 'execute'` + the resolved
    scope. THAT result is what the user sees.
 
 ### What you must NOT do
 
 - ❌ **Do NOT** print the discovery narrative to the user as a final
-  answer. Lines like "Here is what Lolly came back with: 193 GL accounts
-  mapped, March 2026 anomaly..." reveal Lolly's *internal reasoning*,
+  answer. Lines like "Here is what Finny came back with: 193 GL accounts
+  mapped, March 2026 anomaly..." reveal Finny's *internal reasoning*,
   not the answer.
-- ❌ **Do NOT** present Lolly's example clarifying questions verbatim
-  ("Lolly suggests: 1. Which subsidiary? 2. What period?"). Use AskUser
+- ❌ **Do NOT** present Finny's example clarifying questions verbatim
+  ("Finny suggests: 1. Which subsidiary? 2. What period?"). Use AskUser
   with your own framing — those are reference questions for *you*.
 - ❌ **Do NOT** count discovery toward drift detection. `intent_restated`
   in a discovery envelope paraphrases the user's *underlying* question,
@@ -224,9 +224,9 @@ user as if it were the answer.**
 >
 > [Calls discover, then renders to user:]
 >
-> "Here's what Lolly returned for discovery. Variables Lolly needs:
+> "Here's what Finny returned for discovery. Variables Finny needs:
 > entity, period, consolidated, env. Brain hints: 193 GL accounts
-> mapped, March 2026 ₹208 Cr anomaly. Lolly suggests these clarifying
+> mapped, March 2026 ₹208 Cr anomaly. Finny suggests these clarifying
 > questions: 1) Which subsidiary? 2) What period?..."
 
 **Right (smooth handoff):**
@@ -238,7 +238,7 @@ user as if it were the answer.**
 > "Quick check — which entity (ShareChat standalone, MTPL, or
 > consolidated) and which period (April, current quarter, FY)?"
 >
-> [User answers. Calls lolly_query phase:execute with full scope.
+> [User answers. Calls finny_query phase:execute with full scope.
 > Returns the actual P&L envelope.]
 
 If discovery returns a non-`ok` status (e.g., `error`, `refused`), branch
@@ -246,9 +246,9 @@ on it normally per Steps 2-3 above — those are real failures to surface.
 
 ## Destructive intent — refuse before delegation
 
-Lolly is **read-only against NetSuite**. Any natural-language question that
+Finny is **read-only against NetSuite**. Any natural-language question that
 names a destructive verb applied to a NetSuite entity is refused in-bridge
-**before** the question reaches Lolly. The bridge's `lolly_query` handler
+**before** the question reaches Finny. The bridge's `finny_query` handler
 runs a destructive-intent guard analogous to the SuiteQL write-verb guard:
 if the question matches both a destructive verb AND a NetSuite entity, the
 handler returns `status: 'refused'` with `elapsed_ms: 0` — no task created,
@@ -287,10 +287,10 @@ judge MUST:
 `archive`, `close`, `hide`, `mark`, `flag`, `review`, `audit`, `list`,
 `show`, `count` are NOT in the verb list, even though some of them can
 imply state change. If a user asks to "archive old vendor bills",
-`lolly_query` will delegate to Lolly and the judge will see a normal
+`finny_query` will delegate to Finny and the judge will see a normal
 envelope. This is intentional — most "archive"-shaped questions mean
 "show me records I'd archive if I were going to" rather than an actual
-mutate. If Lolly herself decides the question is destructive, she emits
+mutate. If Finny herself decides the question is destructive, she emits
 `status: 'error'`, `error.code: 'other'`, `error.message: 'approval_required'`
 via the §10.3 escape valve, which the judge still handles via Step 3.
 
@@ -301,18 +301,18 @@ Two layers, same outcome:
 | Layer | Fires when | Signal |
 | --- | --- | --- |
 | Bridge destructive-intent guard | Question matches verb + entity | `status: 'refused'`, `elapsed_ms: 0`, no task_id |
-| Lolly's own judgement (escape valve) | Question is subtler but Lolly decides destructive | `status: 'error'`, `error.code: 'other'`, `error.message: 'approval_required'` |
+| Finny's own judgement (escape valve) | Question is subtler but Finny decides destructive | `status: 'error'`, `error.code: 'other'`, `error.message: 'approval_required'` |
 
 The bridge guard is the fast, deterministic, auditable layer. The escape
 valve is the probabilistic safety net for intents the regex missed.
 Scenario 07 in the judge-loop harness exercises the bridge guard. A softer
 scenario (07b, "archive old vendor bills") exercises the fall-through to
-Lolly + the escape valve, confirming the guard doesn't false-positive on
+Finny + the escape valve, confirming the guard doesn't false-positive on
 legitimate read-ish phrasings.
 
 ## Never-reformat rules
 
-Lolly has already normalised her output. Reformatting corrupts it. Four
+Finny has already normalised her output. Reformatting corrupts it. Four
 categories are strictly hands-off:
 
 - **Money amounts** — preserve decimal places exactly. Don't round, don't
@@ -321,14 +321,14 @@ categories are strictly hands-off:
   sandbox-vs-production convention. Flipping them again yields the wrong
   answer. Never re-sign.
 - **GSTIN** — as-is. Do not reformat, split into state/PAN components,
-  validate checksum, or uppercase. What Lolly returns is the record.
+  validate checksum, or uppercase. What Finny returns is the record.
 - **Dates** — NetSuite's native format. Do not re-parse into ISO, do not
   reformat for "friendliness". If the user asked for a specific format,
-  go back to Lolly with that in the question.
+  go back to Finny with that in the question.
 
 ## Unanswered bucket
 
-A non-empty `unanswered[]` means Lolly tried to cover the question but
+A non-empty `unanswered[]` means Finny tried to cover the question but
 some piece was out of reach (blocked query, ambiguous entity, missing
 field). Render those items in a dedicated "What we didn't find:" section
 below the main answer. **Never drop them** — silent omission is the worst
@@ -387,7 +387,7 @@ User asked for **open** balance. Semantic drift ("open" → "total
 including closed"). Retry once with:
 
 ```json
-lolly_query({
+finny_query({
   "question": "What is the current OPEN (unpaid) balance for vendor Acme in production — exclude closed bills.",
   "expected_shape": "scalar",
   "entity_hints": { "env": "production" }
@@ -396,10 +396,10 @@ lolly_query({
 
 If the retry still drifts, surface to the user:
 
-> Lolly answered "total balance including closed bills" but you asked
+> Finny answered "total balance including closed bills" but you asked
 > for the open balance. I retried with an explicit question and she still
 > returned the closed-bill total. You may want to ask directly, or fall
-> back to `lolly_report({report: 'vendor_balance', …})`.
+> back to `finny_report({report: 'vendor_balance', …})`.
 
 ### Example 3 — `'other'` escape valve
 
@@ -422,9 +422,9 @@ Envelope:
 ```
 
 `error.code: 'other'` with `error.message: 'approval_required'`. Do NOT
-retry. Surface Lolly's `assumptions[]` and ask the user to clarify:
+retry. Surface Finny's `assumptions[]` and ask the user to clarify:
 
-> Lolly needs approval before acting on this. She flagged:
+> Finny needs approval before acting on this. She flagged:
 > - "User asked to close bills — this is a write operation"
 > - "No confirmation of which bills were intended"
 >
@@ -433,10 +433,10 @@ retry. Surface Lolly's `assumptions[]` and ask the user to clarify:
 
 ### Surfacing progress on each poll
 
-When `lolly_task_status` returns `status: 'running'` with a non-empty
+When `finny_task_status` returns `status: 'running'` with a non-empty
 `progress` field, render it to the user as a single-line status:
 
-> *"Lolly is: \<progress\>"*
+> *"Finny is: \<progress\>"*
 
 Update only when the value changes (don't repeat the same string on
 consecutive polls — that's noise). Track the last-seen progress string
@@ -446,13 +446,13 @@ If `progress` is undefined or empty on a poll, leave the user-facing
 status unchanged (they last saw whatever progress fired before).
 
 This converts the 30-180s wait from a silent spinner to a live trace
-of what Lolly is doing — "querying NetSuite", "applying sign
-conventions", "assembling MIS P1/P2 buckets", etc. Lolly emits these
-via `lolly_progress` (an internal bridge tool not visible to cowork's
+of what Finny is doing — "querying NetSuite", "applying sign
+conventions", "assembling MIS P1/P2 buckets", etc. Finny emits these
+via `finny_progress` (an internal bridge tool not visible to cowork's
 allowlist).
 
-## Cross-reference: lolly-usage
+## Cross-reference: finny-usage
 
-The `lolly-usage` skill picks which tool to call and with what parameters.
-This skill judges what comes back. Every Lolly call: `lolly-usage` →
+The `finny-usage` skill picks which tool to call and with what parameters.
+This skill judges what comes back. Every Finny call: `finny-usage` →
 tool invocation → `judging-output` → user.

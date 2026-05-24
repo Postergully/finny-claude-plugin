@@ -1,17 +1,17 @@
-// Track L: lolly_remember — persists a synthesis or note into Lolly's
+// Track L: finny_remember — persists a synthesis or note into Finny's
 // workspace memory by forwarding to her agent layer with a "remember"
-// system prompt. The bridge validates and forwards; Lolly's existing
+// system prompt. The bridge validates and forwards; Finny's existing
 // memory writer + 11mirror writeback handles the actual persistence.
 //
 // Read-only contract preserved for the other 4 public tools — this is
 // the only write-style tool the bridge exposes, and the write path is
-// inside Lolly (workspace memory), not against NetSuite.
+// inside Finny (workspace memory), not against NetSuite.
 
 import { z } from 'zod';
 
-import type { LollyEnvelope } from '../../types/envelope.js';
-import { OpenClawClient } from '../../openclaw/client.js';
-import { DEFAULT_OPENCLAW_URL, DEFAULT_MODEL } from '../../config/constants.js';
+import type { FinnyEnvelope } from '../../types/envelope.js';
+import { HermesClient } from '../../hermes/client.js';
+import { DEFAULT_FINNY_UPSTREAM_URL, DEFAULT_MODEL } from '../../config/constants.js';
 import { buildRememberSystemPrompt } from './_shared/systemPrompt.js';
 import { errorEnvelope } from './_shared/envelopeBuilders.js';
 import { getOrCreateSession } from './_shared/sessionStore.js';
@@ -32,18 +32,18 @@ export const rememberInputSchema = z.object({
 export type RememberInput = z.infer<typeof rememberInputSchema>;
 
 function getGatewayUrl(): string {
-  return process.env.OPENCLAW_URL || DEFAULT_OPENCLAW_URL;
+  return process.env.FINNY_UPSTREAM_URL || DEFAULT_FINNY_UPSTREAM_URL;
 }
 
 function getGatewayToken(): string | undefined {
-  return process.env.LOLLY_GATEWAY_TOKEN || process.env.OPENCLAW_GATEWAY_TOKEN;
+  return process.env.FINNY_GATEWAY_TOKEN || process.env.FINNY_UPSTREAM_TOKEN;
 }
 
 function getModel(): string {
-  return process.env.OPENCLAW_MODEL || DEFAULT_MODEL;
+  return process.env.FINNY_MODEL || DEFAULT_MODEL;
 }
 
-async function handler(rawInput: RememberInput): Promise<LollyEnvelope> {
+async function handler(rawInput: RememberInput): Promise<FinnyEnvelope> {
   const input = rememberInputSchema.parse(rawInput);
 
   const sessionPrincipal = `remember-${input.source}:production`;
@@ -60,7 +60,7 @@ async function handler(rawInput: RememberInput): Promise<LollyEnvelope> {
   const token = getGatewayToken();
   const model = getModel();
   const deadlineMs = 60_000;
-  const client = new OpenClawClient(url, token, deadlineMs, model);
+  const client = new HermesClient(url, token, deadlineMs, model);
 
   const combined = `${systemPrompt}\n\n---\n\n${input.content}`;
   const reqShape = {
@@ -84,7 +84,7 @@ async function handler(rawInput: RememberInput): Promise<LollyEnvelope> {
     });
 
     // The bridge owns the success envelope shape for remember — we don't
-    // need to parse Lolly's response or trust her envelope. Lolly's job
+    // need to parse Finny's response or trust her envelope. Finny's job
     // is to persist; the bridge synthesizes the ok confirmation. This
     // mirrors the spec §5.4 contract: data.shape: 'scalar', value: 'ok'.
     return {
@@ -96,11 +96,11 @@ async function handler(rawInput: RememberInput): Promise<LollyEnvelope> {
       sources: [],
       confidence: 'high',
       confidence_reason:
-        'Forwarded to Lolly with remember system prompt; persistence handled by her memory writer.',
+        'Forwarded to Finny with remember system prompt; persistence handled by her memory writer.',
       elapsed_ms: latencyMs,
       env_used: 'production',
       bridge_version: BRIDGE_VERSION,
-      lolly_session_id: sessionId,
+      finny_session_id: sessionId,
     };
   } catch (err) {
     const latencyMs = Date.now() - started;
@@ -119,15 +119,15 @@ async function handler(rawInput: RememberInput): Promise<LollyEnvelope> {
       elapsedMs: latencyMs,
       envUsed: 'production',
       sessionId,
-      intentRestated: 'lolly_remember',
+      intentRestated: 'finny_remember',
     });
   }
 }
 
 export const rememberTool = {
-  name: 'lolly_remember' as const,
+  name: 'finny_remember' as const,
   description:
-    "Persist a synthesis or note into Lolly's memory. Bridge forwards to Lolly's agent layer with a remember system prompt; Lolly's existing memory writer handles workspace memory + 11mirror writeback. Use for daily day_dream digests or operator-driven notes. Input: { content (≤2000 token approx, ~8000 chars), tags (recommended: ['day_dream', 'YYYY-MM-DD']), source ('cowork' | 'manual') }.",
+    "Persist a synthesis or note into Finny's memory. Bridge forwards to Finny's agent layer with a remember system prompt; Finny's existing memory writer handles workspace memory + 11mirror writeback. Use for daily day_dream digests or operator-driven notes. Input: { content (≤2000 token approx, ~8000 chars), tags (recommended: ['day_dream', 'YYYY-MM-DD']), source ('cowork' | 'manual') }.",
   inputSchema: rememberInputSchema,
   handler,
 };

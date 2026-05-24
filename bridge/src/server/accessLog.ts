@@ -4,7 +4,7 @@
  * Emits one JSONL line per request on response finish. Zero PII by
  * construction: we never log envelope data (`data.rows`, `data.narrative`,
  * `intent_restated`), error messages, or assumptions. We DO log shape:
- * tool name, envelope status, confidence, lolly_session_id, infra
+ * tool name, envelope status, confidence, finny_session_id, infra
  * error code (not message), HTTP status, duration.
  *
  * Tool handlers opt in by setting `res.locals.envelopeSummary` before
@@ -22,13 +22,13 @@
 import type { NextFunction, Request, Response } from 'express';
 import fs from 'node:fs';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { LollyEnvelope } from '../types/envelope.js';
+import type { FinnyEnvelope } from '../types/envelope.js';
 
 export interface EnvelopeSummary {
   tool: string;
-  status: LollyEnvelope['status'];
-  confidence: LollyEnvelope['confidence'];
-  lolly_session_id?: string;
+  status: FinnyEnvelope['status'];
+  confidence: FinnyEnvelope['confidence'];
+  finny_session_id?: string;
   error_code?: string;
   // Track G: true when phase: 'discover' returned an envelope with
   // sources[] containing kind 'suiteql' or 'rest'. The bridge surfaces
@@ -45,9 +45,9 @@ export interface AccessLogLine {
   duration_ms: number;
   auth_subject?: string;
   tool?: string;
-  envelope_status?: LollyEnvelope['status'];
-  envelope_confidence?: LollyEnvelope['confidence'];
-  lolly_session_id?: string;
+  envelope_status?: FinnyEnvelope['status'];
+  envelope_confidence?: FinnyEnvelope['confidence'];
+  finny_session_id?: string;
   error_code?: string;
   discover_violation?: boolean;
 }
@@ -115,7 +115,7 @@ export function formatAccessLogLine(line: AccessLogLine): string {
   if (line.envelope_status !== undefined) cleaned.envelope_status = line.envelope_status;
   if (line.envelope_confidence !== undefined)
     cleaned.envelope_confidence = line.envelope_confidence;
-  if (line.lolly_session_id !== undefined) cleaned.lolly_session_id = line.lolly_session_id;
+  if (line.finny_session_id !== undefined) cleaned.finny_session_id = line.finny_session_id;
   if (line.error_code !== undefined) cleaned.error_code = line.error_code;
   if (line.discover_violation !== undefined) cleaned.discover_violation = line.discover_violation;
   return JSON.stringify(cleaned);
@@ -163,7 +163,7 @@ export function accessLogMiddleware() {
         line.tool = summary.tool;
         line.envelope_status = summary.status;
         line.envelope_confidence = summary.confidence;
-        if (summary.lolly_session_id) line.lolly_session_id = summary.lolly_session_id;
+        if (summary.finny_session_id) line.finny_session_id = summary.finny_session_id;
         if (summary.error_code) line.error_code = summary.error_code;
         if (summary.discover_violation) line.discover_violation = true;
       }
@@ -187,13 +187,13 @@ export function accessLogMiddleware() {
  * `data`, `error.message`, `intent_restated`, `assumptions`, `unanswered`,
  * and `sources`.
  */
-export function summarizeEnvelopeForLog(tool: string, env: LollyEnvelope): EnvelopeSummary {
+export function summarizeEnvelopeForLog(tool: string, env: FinnyEnvelope): EnvelopeSummary {
   const summary: EnvelopeSummary = {
     tool,
     status: env.status,
     confidence: env.confidence,
   };
-  if (env.lolly_session_id) summary.lolly_session_id = env.lolly_session_id;
+  if (env.finny_session_id) summary.finny_session_id = env.finny_session_id;
   if (env.error?.code) summary.error_code = env.error.code;
   // Track G: detect the bridge-side discover_violation marker from
   // finalizeEnvelope (chatPipeline.ts). Marker is a substring of

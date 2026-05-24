@@ -41,9 +41,9 @@ jobs:
       - name: Wait for npm package to be available
         run: |
           VERSION=$(node -p "require('./server.json').version")
-          echo "Waiting for openclaw-mcp@$VERSION on npm..."
+          echo "Waiting for hermes-mcp@$VERSION on npm..."
           for i in $(seq 1 60); do
-            if npm view "openclaw-mcp@$VERSION" version 2>/dev/null | grep -q "^$VERSION$"; then
+            if npm view "hermes-mcp@$VERSION" version 2>/dev/null | grep -q "^$VERSION$"; then
               echo "Package available."
               exit 0
             fi
@@ -56,13 +56,13 @@ jobs:
       - name: Wait for OCI image to be available
         run: |
           VERSION=$(node -p "require('./server.json').version")
-          echo "Waiting for ghcr.io/freema/openclaw-mcp:$VERSION..."
-          TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:freema/openclaw-mcp:pull" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d).token))")
+          echo "Waiting for ghcr.io/freema/hermes-mcp:$VERSION..."
+          TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:freema/hermes-mcp:pull" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d).token))")
           for i in $(seq 1 60); do
             CODE=$(curl -s -o /dev/null -w "%{http_code}" \
               -H "Authorization: Bearer $TOKEN" \
               -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json" \
-              "https://ghcr.io/v2/freema/openclaw-mcp/manifests/$VERSION")
+              "https://ghcr.io/v2/freema/hermes-mcp/manifests/$VERSION")
             if [ "$CODE" = "200" ]; then
               echo "Image available."
               exit 0

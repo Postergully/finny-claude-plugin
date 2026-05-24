@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LollyEnvelopeSchema, type LollyEnvelope } from '../../../types/envelope.js';
+import { FinnyEnvelopeSchema, type FinnyEnvelope } from '../../../types/envelope.js';
 
 // Mock chatPipeline.runQuery so the worker doesn't hit the real gateway.
 // This is the seam Task 2 introduces: the handler creates a task and the
 // worker drains via runQuery. By controlling runQuery we can exercise
 // fast-path (task completes inside deadline) and slow-path (task still
 // running when deadline elapses) behavior deterministically.
-const runQueryMock = vi.hoisted(() => vi.fn<(...args: unknown[]) => Promise<LollyEnvelope>>());
+const runQueryMock = vi.hoisted(() => vi.fn<(...args: unknown[]) => Promise<FinnyEnvelope>>());
 vi.mock('../../../mcp/tools/_shared/chatPipeline.js', () => ({
   runQuery: runQueryMock,
 }));
@@ -14,7 +14,7 @@ vi.mock('../../../mcp/tools/_shared/chatPipeline.js', () => ({
 // Import AFTER mock registration so the module graph picks up the mock.
 const { queryTool } = await import('../../../mcp/tools/query.js');
 
-function makeOkEnvelope(): LollyEnvelope {
+function makeOkEnvelope(): FinnyEnvelope {
   return {
     status: 'ok',
     intent_restated: 'mocked',
@@ -27,11 +27,11 @@ function makeOkEnvelope(): LollyEnvelope {
     elapsed_ms: 10,
     env_used: 'production',
     bridge_version: '0.0.1',
-    lolly_session_id: 'sess-test',
+    finny_session_id: 'sess-test',
   };
 }
 
-describe('lolly_query — async handler (Task 2 rewrite)', () => {
+describe('finny_query — async handler (Task 2 rewrite)', () => {
   beforeEach(() => {
     runQueryMock.mockReset();
   });
@@ -49,7 +49,7 @@ describe('lolly_query — async handler (Task 2 rewrite)', () => {
       deadline_ms: 5_000,
     });
 
-    const parsed = LollyEnvelopeSchema.safeParse(res);
+    const parsed = FinnyEnvelopeSchema.safeParse(res);
     expect(parsed.success).toBe(true);
     expect(res.status).toBe('ok');
     expect(res.data?.shape).toBe('scalar');
@@ -60,10 +60,10 @@ describe('lolly_query — async handler (Task 2 rewrite)', () => {
   });
 
   it('slow path: deadline elapses before task completes → running envelope with task_id in data.value', async () => {
-    let resolveChat: (e: LollyEnvelope) => void = () => undefined;
+    let resolveChat: (e: FinnyEnvelope) => void = () => undefined;
     runQueryMock.mockImplementation(
       () =>
-        new Promise<LollyEnvelope>((resolve) => {
+        new Promise<FinnyEnvelope>((resolve) => {
           resolveChat = resolve;
         })
     );
@@ -85,7 +85,7 @@ describe('lolly_query — async handler (Task 2 rewrite)', () => {
       expect(res.data.rendered_markdown).toContain(String(res.task_id));
       expect(res.data.rendered_markdown).toContain('deadline_exceeded_ms');
     }
-    expect(LollyEnvelopeSchema.safeParse(res).success).toBe(true);
+    expect(FinnyEnvelopeSchema.safeParse(res).success).toBe(true);
 
     // Release the pending chat so the background worker doesn't leak.
     resolveChat(makeOkEnvelope());

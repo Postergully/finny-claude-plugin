@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { LollyEnvelope } from '../../types/envelope.js';
+import type { FinnyEnvelope } from '../../types/envelope.js';
 import { taskManager } from '../tasks/manager.js';
 import { ensureTaskWorker, awaitTaskOrEscalate } from './_shared/taskWorker.js';
 import type { RunQueryParams } from './_shared/chatPipeline.js';
@@ -17,15 +17,15 @@ export const reportInputSchema = z.object({
   ]),
   params: z.record(z.string(), z.string()).default({}),
   env: z.enum(['sandbox', 'production']).default('production'),
-  // Mirror lolly_query's async knob. The underlying chat task keeps running
-  // beyond this deadline; cowork resumes via lolly_task_status.
+  // Mirror finny_query's async knob. The underlying chat task keeps running
+  // beyond this deadline; cowork resumes via finny_task_status.
   deadline_ms: z.number().int().positive().max(300_000).default(10_000),
   sessionId: z.string().optional(),
 });
 
 export type ReportInput = z.infer<typeof reportInputSchema>;
 
-async function handler(rawInput: ReportInput): Promise<LollyEnvelope> {
+async function handler(rawInput: ReportInput): Promise<FinnyEnvelope> {
   const input = reportInputSchema.parse(rawInput);
   const envUsed = input.env;
   const principal = input.sessionId ?? `m2-default:${envUsed}`;
@@ -86,9 +86,9 @@ async function handler(rawInput: ReportInput): Promise<LollyEnvelope> {
 }
 
 export const reportTool = {
-  name: 'lolly_report' as const,
+  name: 'finny_report' as const,
   description:
-    'Run a named structured report against Lolly. Report name must be one of the registered enum values. Async by default: if the task does not complete within deadline_ms, returns status:"running" with task_id in data.value — poll via lolly_task_status.',
+    'Run a named structured report against Finny. Report name must be one of the registered enum values. Async by default: if the task does not complete within deadline_ms, returns status:"running" with task_id in data.value — poll via finny_task_status.',
   inputSchema: reportInputSchema,
   handler,
 };

@@ -1,5 +1,5 @@
 // In-memory session store with 64-entry LRU + 1-hour TTL.
-// Maps principal -> stable session id so Lolly threads conversation memory
+// Maps principal -> stable session id so Finny threads conversation memory
 // across calls from the same caller within a bridge process lifetime.
 
 import { randomUUID } from 'node:crypto';
@@ -49,7 +49,7 @@ export function getOrCreateSession(principal: string): string {
   if (existing) {
     store.delete(principal);
   }
-  const sessionId = `lolly-${randomUUID()}`;
+  const sessionId = `finny-${randomUUID()}`;
   store.set(principal, { sessionId, lastUsed: now });
   prune(now);
   return sessionId;

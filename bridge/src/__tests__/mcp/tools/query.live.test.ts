@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { queryTool } from '../../../mcp/tools/query.js';
 import { taskManager } from '../../../mcp/tasks/manager.js';
-import { LollyEnvelopeSchema, type LollyEnvelope } from '../../../types/envelope.js';
+import { FinnyEnvelopeSchema, type FinnyEnvelope } from '../../../types/envelope.js';
 
-const LIVE = !!process.env.LOLLY_GATEWAY_TOKEN;
+const LIVE = !!process.env.FINNY_GATEWAY_TOKEN;
 
-describe.skipIf(!LIVE)('lolly_query (LIVE against real gateway)', () => {
+describe.skipIf(!LIVE)('finny_query (LIVE against real gateway)', () => {
   it('returns a valid scalar envelope for a trivial arithmetic question', async () => {
     const res = await queryTool.handler({
       question: 'What is 7 times 8? Respond with the scalar value only.',
@@ -16,7 +16,7 @@ describe.skipIf(!LIVE)('lolly_query (LIVE against real gateway)', () => {
     // With a generous wait budget this should complete in-band.
     if (res.status === 'running') {
       // Fall-through: poll via taskManager directly. Task 3 will replace
-      // this with lolly_task_status — for now internal state is OK.
+      // this with finny_task_status — for now internal state is OK.
       const taskId = res.task_id!;
       const polled = await pollTaskToTerminal(taskId, 200_000);
       expect(['ok', 'partial']).toContain(polled.status);
@@ -24,7 +24,7 @@ describe.skipIf(!LIVE)('lolly_query (LIVE against real gateway)', () => {
       expect(['ok', 'partial']).toContain(res.status);
       expect(res.data?.shape).toBe('scalar');
     }
-    expect(res.lolly_session_id.length).toBeGreaterThan(0);
+    expect(res.finny_session_id.length).toBeGreaterThan(0);
     expect(res.bridge_version).toMatch(/^0\./);
   }, 240_000);
 
@@ -45,17 +45,17 @@ describe.skipIf(!LIVE)('lolly_query (LIVE against real gateway)', () => {
     }
     const terminal = await pollTaskToTerminal(res.task_id!, 220_000);
     expect(['ok', 'partial', 'error', 'refused']).toContain(terminal.status);
-    expect(LollyEnvelopeSchema.safeParse(terminal).success).toBe(true);
+    expect(FinnyEnvelopeSchema.safeParse(terminal).success).toBe(true);
   }, 260_000);
 });
 
-async function pollTaskToTerminal(taskId: string, totalMs: number): Promise<LollyEnvelope> {
+async function pollTaskToTerminal(taskId: string, totalMs: number): Promise<FinnyEnvelope> {
   const started = Date.now();
   while (Date.now() - started < totalMs) {
     const t = taskManager.get(taskId);
     if (!t) throw new Error(`Task ${taskId} vanished`);
     if (t.status === 'completed' && t.result) {
-      return JSON.parse(t.result) as LollyEnvelope;
+      return JSON.parse(t.result) as FinnyEnvelope;
     }
     if (t.status === 'failed' || t.status === 'cancelled') {
       throw new Error(`Task ${taskId} terminal=${t.status}: ${t.error ?? ''}`);

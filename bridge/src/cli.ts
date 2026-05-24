@@ -1,10 +1,10 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { DEFAULT_OPENCLAW_URL, DEFAULT_MODEL } from './config/constants.js';
-import type { InstanceConfig } from './openclaw/types.js';
+import { DEFAULT_FINNY_UPSTREAM_URL, DEFAULT_MODEL } from './config/constants.js';
+import type { InstanceConfig } from './hermes/types.js';
 
 export interface CliArgs {
-  openclawUrl: string;
+  hermesUrl: string;
   gatewayToken: string | undefined;
   model: string;
   // `'http'` is Streamable HTTP mode (serves `/mcp`). The CLI accepts `'sse'`
@@ -27,22 +27,22 @@ export interface CliArgs {
 export function parseArguments(version: string): CliArgs {
   const argv = yargs(hideBin(process.argv))
     .version(version)
-    .option('openclaw-url', {
+    .option('hermes-url', {
       alias: 'u',
       type: 'string',
-      description: 'OpenClaw gateway URL',
-      default: process.env.OPENCLAW_URL || DEFAULT_OPENCLAW_URL,
+      description: 'Hermes gateway URL',
+      default: process.env.FINNY_UPSTREAM_URL || DEFAULT_FINNY_UPSTREAM_URL,
     })
     .option('gateway-token', {
       type: 'string',
-      description: 'Bearer token for OpenClaw gateway authentication',
-      default: process.env.OPENCLAW_GATEWAY_TOKEN || undefined,
+      description: 'Bearer token for Hermes gateway authentication',
+      default: process.env.FINNY_UPSTREAM_TOKEN || undefined,
     })
     .option('model', {
       alias: 'm',
       type: 'string',
       description: 'Model name for chat completions',
-      default: process.env.OPENCLAW_MODEL || DEFAULT_MODEL,
+      default: process.env.FINNY_MODEL || DEFAULT_MODEL,
     })
     .option('transport', {
       alias: 't',
@@ -66,7 +66,7 @@ export function parseArguments(version: string): CliArgs {
     .option('timeout', {
       type: 'number',
       description: 'Request timeout in milliseconds',
-      default: parseInt(process.env.OPENCLAW_TIMEOUT_MS || '120000', 10),
+      default: parseInt(process.env.FINNY_TIMEOUT_MS || '120000', 10),
     })
     .option('debug', {
       type: 'boolean',
@@ -107,21 +107,21 @@ export function parseArguments(version: string): CliArgs {
     .help()
     .parseSync();
 
-  // Build instance configs: OPENCLAW_INSTANCES takes precedence, otherwise single-instance from existing env vars
+  // Build instance configs: FINNY_INSTANCES takes precedence, otherwise single-instance from existing env vars
   let instances: InstanceConfig[];
-  const instancesEnv = process.env.OPENCLAW_INSTANCES;
+  const instancesEnv = process.env.FINNY_INSTANCES;
 
   if (instancesEnv) {
     try {
       const parsed = JSON.parse(instancesEnv);
       if (!Array.isArray(parsed) || parsed.length === 0) {
-        throw new Error('OPENCLAW_INSTANCES must be a non-empty JSON array');
+        throw new Error('FINNY_INSTANCES must be a non-empty JSON array');
       }
       // Validate each item has required fields
       for (const item of parsed) {
         if (!item || typeof item.name !== 'string' || !item.name.trim()) {
           throw new Error(
-            'Each instance in OPENCLAW_INSTANCES must have a non-empty string "name"'
+            'Each instance in FINNY_INSTANCES must have a non-empty string "name"'
           );
         }
         if (typeof item.url !== 'string' || !item.url.trim()) {
@@ -135,7 +135,7 @@ export function parseArguments(version: string): CliArgs {
       }));
     } catch (error) {
       if (error instanceof SyntaxError) {
-        throw new Error(`OPENCLAW_INSTANCES contains invalid JSON: ${error.message}`);
+        throw new Error(`FINNY_INSTANCES contains invalid JSON: ${error.message}`);
       }
       throw error;
     }
@@ -144,7 +144,7 @@ export function parseArguments(version: string): CliArgs {
     instances = [
       {
         name: 'default',
-        url: argv['openclaw-url'] as string,
+        url: argv['hermes-url'] as string,
         token: argv['gateway-token'] as string | undefined,
         timeout: argv.timeout,
         default: true,
@@ -184,7 +184,7 @@ export function parseArguments(version: string): CliArgs {
   }
 
   return {
-    openclawUrl: argv['openclaw-url'] as string,
+    hermesUrl: argv['hermes-url'] as string,
     gatewayToken: argv['gateway-token'] as string | undefined,
     model: argv.model as string,
     transport,

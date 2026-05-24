@@ -18,13 +18,13 @@ import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js
 import { mcpAuthRouter } from '@modelcontextprotocol/sdk/server/auth/router.js';
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
 
-import { OpenClawAuthProvider } from '../../auth/provider.js';
+import { HermesAuthProvider } from '../../auth/provider.js';
 
 const CLIENT_ID = 'test-client';
 const CLIENT_SECRET = 'test-secret-value';
 // SDK 1.29 tightened redirect_uri validation: the authorize handler now
 // checks redirect_uri against client.redirect_uris with exact-equality,
-// which defeats the ALLOW_ANY_REDIRECT Proxy trick in OpenClawClientsStore.
+// which defeats the ALLOW_ANY_REDIRECT Proxy trick in HermesClientsStore.
 // Production deployments must pre-register redirect_uris. Test mirrors that
 // by passing an explicit allowed callback URL through provider config.
 const TEST_REDIRECT_URI = 'http://localhost/callback';
@@ -33,7 +33,7 @@ let server: http.Server;
 let baseUrl: string;
 
 function createTestApp() {
-  const provider = new OpenClawAuthProvider({
+  const provider = new HermesAuthProvider({
     clientId: CLIENT_ID,
     clientSecret: CLIENT_SECRET,
     redirectUris: [TEST_REDIRECT_URI],

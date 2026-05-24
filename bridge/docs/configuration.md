@@ -4,18 +4,18 @@ All configuration can be done via environment variables. Copy `.env.example` to 
 
 ## Environment Variables
 
-### OpenClaw Connection
+### Hermes Connection
 
 | Variable                 | Description                             | Default                  |
 | ------------------------ | --------------------------------------- | ------------------------ |
-| `OPENCLAW_URL`           | OpenClaw gateway URL                    | `http://127.0.0.1:18789` |
-| `OPENCLAW_GATEWAY_TOKEN` | Bearer token for gateway authentication | (none)                   |
-| `OPENCLAW_TIMEOUT_MS`    | Request timeout in milliseconds         | `120000` (2 min)         |
-| `OPENCLAW_MODEL`         | Model name for chat completions         | `openclaw`               |
+| `FINNY_UPSTREAM_URL`           | Hermes gateway URL                    | `http://127.0.0.1:8642` |
+| `FINNY_UPSTREAM_TOKEN` | Bearer token for gateway authentication | (none)                   |
+| `FINNY_TIMEOUT_MS`    | Request timeout in milliseconds         | `120000` (2 min)         |
+| `FINNY_MODEL`         | Model name for chat completions         | `hermes`               |
 
 ### Multi-Instance Mode
 
-Orchestrate multiple OpenClaw gateways from a single MCP server. Set `OPENCLAW_INSTANCES` as a JSON array — when present, it takes precedence over `OPENCLAW_URL` / `OPENCLAW_GATEWAY_TOKEN`.
+Orchestrate multiple Hermes gateways from a single MCP server. Set `FINNY_INSTANCES` as a JSON array — when present, it takes precedence over `FINNY_UPSTREAM_URL` / `FINNY_UPSTREAM_TOKEN`.
 
 ```
                          ┌─────────────────┐
@@ -23,23 +23,23 @@ Orchestrate multiple OpenClaw gateways from a single MCP server. Set `OPENCLAW_I
                          └────────┬────────┘
                                   │
                     ┌─────────────▼─────────────┐
-                    │   OpenClaw MCP Bridge      │
+                    │   Hermes MCP Bridge      │
                     │                            │
-                    │   instance="prod"  ──────────────► OpenClaw GW (prod)
-                    │   instance="staging" ────────────► OpenClaw GW (staging)
-                    │   instance="dev"  ───────────────► OpenClaw GW (dev)
-                    │   (no instance)   ──► default ──► OpenClaw GW (prod)
+                    │   instance="prod"  ──────────────► Hermes GW (prod)
+                    │   instance="staging" ────────────► Hermes GW (staging)
+                    │   instance="dev"  ───────────────► Hermes GW (dev)
+                    │   (no instance)   ──► default ──► Hermes GW (prod)
                     └────────────────────────────┘
 ```
 
 | Variable             | Description                    | Default                       |
 | -------------------- | ------------------------------ | ----------------------------- |
-| `OPENCLAW_INSTANCES` | JSON array of instance configs | (none — single-instance mode) |
+| `FINNY_INSTANCES` | JSON array of instance configs | (none — single-instance mode) |
 
 **Example:**
 
 ```bash
-OPENCLAW_INSTANCES='[
+FINNY_INSTANCES='[
   {"name": "prod", "url": "http://prod:18789", "token": "tok1", "default": true},
   {"name": "staging", "url": "http://staging:18789", "token": "tok2"},
   {"name": "dev", "url": "http://dev:18789", "token": "tok3"}
@@ -51,30 +51,30 @@ Each instance object supports:
 | Field     | Type    | Required | Description                                                              |
 | --------- | ------- | -------- | ------------------------------------------------------------------------ |
 | `name`    | string  | Yes      | Unique instance name (1-64 chars, alphanumeric/dashes/underscores)       |
-| `url`     | string  | Yes      | OpenClaw gateway URL (http or https only)                                |
+| `url`     | string  | Yes      | Hermes gateway URL (http or https only)                                |
 | `token`   | string  | No       | Bearer token for gateway authentication                                  |
-| `timeout` | number  | No       | Request timeout in ms (inherits global `OPENCLAW_TIMEOUT_MS` if omitted) |
+| `timeout` | number  | No       | Request timeout in ms (inherits global `FINNY_TIMEOUT_MS` if omitted) |
 | `default` | boolean | No       | Mark as the default instance (first instance is default if none marked)  |
 
 **Using instances in tools:**
 
-All gateway-facing tools (`openclaw_chat`, `openclaw_status`, `openclaw_chat_async`) accept an optional `instance` parameter. When omitted, the default instance is used.
+All gateway-facing tools (`hermes_chat`, `hermes_status`, `hermes_chat_async`) accept an optional `instance` parameter. When omitted, the default instance is used.
 
 ```
 # Target a specific instance
-openclaw_chat message="Hello" instance="staging"
+hermes_chat message="Hello" instance="staging"
 
 # Check health of a specific gateway
-openclaw_status instance="prod"
+hermes_status instance="prod"
 
 # List all available instances (names, URLs, default — tokens are never exposed)
-openclaw_instances
+hermes_instances
 
 # Async tasks also support instance targeting
-openclaw_chat_async message="Run migration" instance="dev"
+hermes_chat_async message="Run migration" instance="dev"
 
 # Filter task list by instance
-openclaw_task_list instance="staging"
+hermes_task_list instance="staging"
 ```
 
 **How instance resolution works:**
@@ -90,15 +90,15 @@ Each instance gets its own isolated HTTP client with independent auth token, tim
 ```yaml
 services:
   mcp-bridge:
-    image: ghcr.io/freema/openclaw-mcp:latest
+    image: ghcr.io/freema/hermes-mcp:latest
     environment:
-      - OPENCLAW_INSTANCES=[{"name":"prod","url":"http://prod-gw:18789","token":"tok1","default":true},{"name":"staging","url":"http://staging-gw:18789","token":"tok2"}]
+      - FINNY_INSTANCES=[{"name":"prod","url":"http://prod-gw:18789","token":"tok1","default":true},{"name":"staging","url":"http://staging-gw:18789","token":"tok2"}]
       - AUTH_ENABLED=true
-      - MCP_CLIENT_ID=openclaw
+      - MCP_CLIENT_ID=hermes
       - MCP_CLIENT_SECRET=${MCP_CLIENT_SECRET}
 ```
 
-**Backward compatibility:** When `OPENCLAW_INSTANCES` is not set, the server creates a single `"default"` instance from `OPENCLAW_URL` + `OPENCLAW_GATEWAY_TOKEN`. Existing deployments work without any configuration change — zero migration required.
+**Backward compatibility:** When `FINNY_INSTANCES` is not set, the server creates a single `"default"` instance from `FINNY_UPSTREAM_URL` + `FINNY_UPSTREAM_TOKEN`. Existing deployments work without any configuration change — zero migration required.
 
 ### Server Settings (SSE transport)
 
@@ -129,7 +129,7 @@ The server uses the MCP SDK's built-in OAuth 2.1 server with authorization code 
 | Variable            | Description                                                 | Required                   |
 | ------------------- | ----------------------------------------------------------- | -------------------------- |
 | `AUTH_ENABLED`      | Enable OAuth authentication (`true`/`false`)                | Yes for production         |
-| `MCP_CLIENT_ID`     | OAuth client ID (e.g., `openclaw`)                          | When auth enabled          |
+| `MCP_CLIENT_ID`     | OAuth client ID (e.g., `hermes`)                          | When auth enabled          |
 | `MCP_CLIENT_SECRET` | OAuth client secret                                         | When auth enabled          |
 | `MCP_ISSUER_URL`    | OAuth issuer URL override (e.g., `https://mcp.example.com`) | When behind HTTPS proxy    |
 | `MCP_REDIRECT_URIS` | Allowed redirect URIs (comma-separated)                     | Recommended for production |

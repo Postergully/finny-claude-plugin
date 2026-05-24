@@ -1,53 +1,53 @@
 import { describe, it, expect } from 'vitest';
-import { OpenClawError, OpenClawConnectionError, OpenClawApiError } from '../../utils/errors.js';
+import { HermesError, HermesConnectionError, HermesApiError } from '../../utils/errors.js';
 
-describe('OpenClawError', () => {
+describe('HermesError', () => {
   it('is an instance of Error', () => {
-    const err = new OpenClawError('test');
+    const err = new HermesError('test');
     expect(err).toBeInstanceOf(Error);
-    expect(err).toBeInstanceOf(OpenClawError);
+    expect(err).toBeInstanceOf(HermesError);
   });
 
-  it('has name "OpenClawError"', () => {
-    const err = new OpenClawError('test');
-    expect(err.name).toBe('OpenClawError');
+  it('has name "HermesError"', () => {
+    const err = new HermesError('test');
+    expect(err.name).toBe('HermesError');
   });
 
   it('stores the message', () => {
-    const err = new OpenClawError('something broke');
+    const err = new HermesError('something broke');
     expect(err.message).toBe('something broke');
   });
 });
 
-describe('OpenClawConnectionError', () => {
-  it('extends OpenClawError and Error', () => {
-    const err = new OpenClawConnectionError('no connection');
+describe('HermesConnectionError', () => {
+  it('extends HermesError and Error', () => {
+    const err = new HermesConnectionError('no connection');
     expect(err).toBeInstanceOf(Error);
-    expect(err).toBeInstanceOf(OpenClawError);
-    expect(err).toBeInstanceOf(OpenClawConnectionError);
+    expect(err).toBeInstanceOf(HermesError);
+    expect(err).toBeInstanceOf(HermesConnectionError);
   });
 
-  it('has name "OpenClawConnectionError"', () => {
-    const err = new OpenClawConnectionError('timeout');
-    expect(err.name).toBe('OpenClawConnectionError');
+  it('has name "HermesConnectionError"', () => {
+    const err = new HermesConnectionError('timeout');
+    expect(err.name).toBe('HermesConnectionError');
   });
 });
 
-describe('OpenClawApiError', () => {
-  it('extends OpenClawError and Error', () => {
-    const err = new OpenClawApiError('not found', 404);
+describe('HermesApiError', () => {
+  it('extends HermesError and Error', () => {
+    const err = new HermesApiError('not found', 404);
     expect(err).toBeInstanceOf(Error);
-    expect(err).toBeInstanceOf(OpenClawError);
-    expect(err).toBeInstanceOf(OpenClawApiError);
+    expect(err).toBeInstanceOf(HermesError);
+    expect(err).toBeInstanceOf(HermesApiError);
   });
 
-  it('has name "OpenClawApiError"', () => {
-    const err = new OpenClawApiError('fail', 500);
-    expect(err.name).toBe('OpenClawApiError');
+  it('has name "HermesApiError"', () => {
+    const err = new HermesApiError('fail', 500);
+    expect(err.name).toBe('HermesApiError');
   });
 
   it('stores statusCode', () => {
-    const err = new OpenClawApiError('not found', 404);
+    const err = new HermesApiError('not found', 404);
     expect(err.statusCode).toBe(404);
   });
 });

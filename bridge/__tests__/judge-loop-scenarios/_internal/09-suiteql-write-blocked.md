@@ -4,7 +4,7 @@
 User pastes a destructive SQL (tests the in-bridge write-verb guard).
 
 ## Expected tool
-`lolly_executeSuiteQL` — write-verb guard fires BEFORE any gateway call.
+`finny_executeSuiteQL` — write-verb guard fires BEFORE any gateway call.
 
 ## Tool input
 ```json
@@ -31,7 +31,7 @@ User pastes a destructive SQL (tests the in-bridge write-verb guard).
 ## Never-reformat checks
 - `confidence_reason` must mention the verb name verbatim (`'DROP'`) so user knows what was flagged
 - No gateway token should be exposed in error output
-- No `lolly_session_id` leak (should be dash or empty sentinel since no session used)
+- No `finny_session_id` leak (should be dash or empty sentinel since no session used)
 
 ## Key in-bridge-guard check
 Scenario 9 is THE scenario that proves the write-verb guard runs in-bridge and never reaches the sandbox. If it hits the gateway, the whole security model is broken.

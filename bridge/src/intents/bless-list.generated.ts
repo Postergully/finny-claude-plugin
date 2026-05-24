@@ -14,7 +14,7 @@ export const INLINED_BLESS_LIST: unknown = {
           "name": "entity",
           "type": "string",
           "strict_nonempty": true,
-          "description": "ShareChat entity name. Lolly resolves to NetSuite IDs at execute time using her brain — do NOT pin to a static enum, since the entity list changes when ShareChat acquires or restructures."
+          "description": "ShareChat entity name. Finny resolves to NetSuite IDs at execute time using her brain — do NOT pin to a static enum, since the entity list changes when ShareChat acquires or restructures."
         },
         {
           "name": "consolidated",

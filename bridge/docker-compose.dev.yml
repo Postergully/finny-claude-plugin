@@ -1,4 +1,4 @@
 services:
   mcp-bridge:
     build: .
-    image: openclaw-mcp:dev
+    image: hermes-mcp:dev

@@ -4,7 +4,7 @@
 What is the current open balance for vendor "Acme" in production?
 
 ## Expected tool
-`lolly_report` — matches the registered `vendor_balance` report.
+`finny_report` — matches the registered `vendor_balance` report.
 
 ## Tool input
 ```json

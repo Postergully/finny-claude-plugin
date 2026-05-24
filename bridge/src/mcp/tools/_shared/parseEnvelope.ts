@@ -26,7 +26,7 @@ export function extractEnvelopeJSON(raw: string): unknown | null {
 export function buildCorrectionPrompt(rawPrevious: string, issues: ZodIssue[] | string): string {
   // Two callers: structured Zod issues from a partial-shape failure, or a
   // static string when the first response had no extractable JSON at all.
-  // Structured form lets Lolly see the exact field paths to repair — the
+  // Structured form lets Finny see the exact field paths to repair — the
   // legacy `issues[0]?.message` form gave her "Required" with no path,
   // which is why she'd regenerate the same broken shape on the second
   // pass and trip envelope_parse_failed (M3 Scenario 08).

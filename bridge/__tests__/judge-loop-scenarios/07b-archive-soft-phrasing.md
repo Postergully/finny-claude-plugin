@@ -4,7 +4,7 @@
 Archive old vendor bills from last quarter — I want to see which ones I'd archive if I were going to.
 
 ## Expected tool
-`lolly_query` — softer action word ("archive") intentionally NOT on the destructive verb list. Guard must fall through and delegate to Lolly.
+`finny_query` — softer action word ("archive") intentionally NOT on the destructive verb list. Guard must fall through and delegate to Finny.
 
 ## Tool input
 ```json
@@ -20,8 +20,8 @@ Archive old vendor bills from last quarter — I want to see which ones I'd arch
 - **NOT** `status: 'refused'` with `elapsed_ms: 0` — that would be a false positive from the bridge guard.
 - Acceptable outcomes (any of these is fine):
   - `status: 'running'` with a `task_id` — async path fired, bridge guard did not short-circuit.
-  - `status: 'ok'` with `data.shape: 'narrative'` — Lolly returned quickly.
-  - `status: 'error'` with `error.code: 'other'` + `error.message: 'approval_required'` — Lolly's own escape valve decided the question was destructive. Still valid: it means the bridge guard correctly deferred to Lolly's finer-grained judgement.
+  - `status: 'ok'` with `data.shape: 'narrative'` — Finny returned quickly.
+  - `status: 'error'` with `error.code: 'other'` + `error.message: 'approval_required'` — Finny's own escape valve decided the question was destructive. Still valid: it means the bridge guard correctly deferred to Finny's finer-grained judgement.
 - What MUST be true: `elapsed_ms > 0` if `status === 'refused'`, OR `status !== 'refused'` entirely. A `status: 'refused'` with `elapsed_ms: 0` means the bridge guard false-positively matched `archive` — regression.
 
 ## Drift variants

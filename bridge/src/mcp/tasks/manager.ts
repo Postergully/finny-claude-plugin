@@ -26,9 +26,9 @@ export interface Task {
   sessionId?: string;
   instanceId?: string;
   priority: number;
-  // Track S: progress visibility. Lolly emits stage strings via the
-  // internal lolly_progress tool during long execute phases; the bridge
-  // writes the latest to these fields and lolly_task_status surfaces
+  // Track S: progress visibility. Finny emits stage strings via the
+  // internal finny_progress tool during long execute phases; the bridge
+  // writes the latest to these fields and finny_task_status surfaces
   // them on subsequent polls. Bounded to 500 chars at write time.
   progress?: string;
   progressUpdatedAt?: Date;
@@ -147,7 +147,7 @@ class TaskManager {
 
   /**
    * Track S: write a progress string to a running task. Called by the
-   * bridge's lolly_progress tool handler when Lolly emits a progress
+   * bridge's finny_progress tool handler when Finny emits a progress
    * update during execute phase. Truncates to 500 chars to bound payload.
    * Returns true if updated, false if task missing or already terminal.
    */

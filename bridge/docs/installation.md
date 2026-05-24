@@ -3,13 +3,13 @@
 ## NPM Install
 
 ```bash
-npm install -g openclaw-mcp
+npm install -g hermes-mcp
 ```
 
 Or run directly with npx:
 
 ```bash
-npx openclaw-mcp
+npx hermes-mcp
 ```
 
 ## Claude Desktop Configuration
@@ -19,12 +19,12 @@ For local use with Claude Desktop, use stdio transport (default):
 ```json
 {
   "mcpServers": {
-    "openclaw": {
+    "hermes-agent": {
       "command": "npx",
-      "args": ["openclaw-mcp"],
+      "args": ["hermes-mcp"],
       "env": {
-        "OPENCLAW_URL": "http://127.0.0.1:18789",
-        "OPENCLAW_GATEWAY_TOKEN": "your-gateway-token"
+        "FINNY_UPSTREAM_URL": "http://127.0.0.1:8642",
+        "FINNY_UPSTREAM_TOKEN": "your-gateway-token"
       }
     }
   }
@@ -43,7 +43,7 @@ For remote access via Claude.ai, deploy with SSE transport and OAuth 2.1 authent
 ### 1. Generate credentials
 
 ```bash
-export MCP_CLIENT_ID=openclaw
+export MCP_CLIENT_ID=hermes
 export MCP_CLIENT_SECRET=$(openssl rand -hex 32)
 echo "Client ID: $MCP_CLIENT_ID"
 echo "Client Secret: $MCP_CLIENT_SECRET"
@@ -53,20 +53,20 @@ echo "Client Secret: $MCP_CLIENT_SECRET"
 
 ```bash
 AUTH_ENABLED=true \
-MCP_CLIENT_ID=openclaw \
+MCP_CLIENT_ID=hermes \
 MCP_CLIENT_SECRET=your-secret \
 CORS_ORIGINS=https://claude.ai \
-OPENCLAW_GATEWAY_TOKEN=your-gateway-token \
-openclaw-mcp --transport sse --port 3000
+FINNY_UPSTREAM_TOKEN=your-gateway-token \
+hermes-mcp --transport sse --port 3000
 ```
 
 ### 3. Add to Claude.ai
 
 In Claude.ai, go to **Settings** → **Integrations** → **Add custom connector**:
 
-- **Name**: `OpenClaw`
+- **Name**: `Hermes`
 - **URL**: `https://mcp.your-domain.com/mcp`
-- **Client ID**: `openclaw` (or your `MCP_CLIENT_ID`)
+- **Client ID**: `hermes` (or your `MCP_CLIENT_ID`)
 - **Client Secret**: your `MCP_CLIENT_SECRET` value
 
 Claude.ai will automatically perform the OAuth 2.1 flow to connect.
@@ -86,12 +86,12 @@ In the Inspector web UI:
 ## CLI Options
 
 ```bash
-openclaw-mcp --help
+hermes-mcp --help
 
 Options:
-  --openclaw-url, -u  OpenClaw gateway URL     [default: "http://127.0.0.1:18789"]
+  --hermes-url, -u  Hermes gateway URL     [default: "http://127.0.0.1:8642"]
   --gateway-token     Bearer token for gateway [default: none]
-  --model, -m         Model name for chat      [default: "openclaw"]
+  --model, -m         Model name for chat      [default: "hermes-agent"]
   --transport, -t     Transport mode           [choices: "stdio", "sse"] [default: "stdio"]
   --port, -p          Port for SSE server      [default: 3000]
   --host              Host for SSE server      [default: "0.0.0.0"]

@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  IMAGE_NAME: openclaw-mcp
+  IMAGE_NAME: hermes-mcp
   DOCKER_COMPOSE: docker compose
 
 tasks:
@@ -91,8 +91,8 @@ tasks:
     desc: Start MCP server in SSE mode (dev)
     cmd: npx tsx src/index.ts --transport sse
     env:
-      OPENCLAW_URL: http://127.0.0.1:18789
-      OPENCLAW_GATEWAY_TOKEN: '{{.OPENCLAW_GATEWAY_TOKEN}}'
+      FINNY_UPSTREAM_URL: http://127.0.0.1:8642
+      FINNY_UPSTREAM_TOKEN: '{{.FINNY_UPSTREAM_TOKEN}}'
       OAUTH_ENABLED: 'false'
       DEBUG: 'true'
 

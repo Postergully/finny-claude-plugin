@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "openclaw": {
+    "hermes-agent": {
       "command": "npx",
-      "args": ["-y", "openclaw-mcp@latest"]
+      "args": ["-y", "hermes-mcp@latest"]
     }
   }
 }

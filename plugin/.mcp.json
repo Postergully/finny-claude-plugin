@@ -1,12 +1,12 @@
 {
   "mcpServers": {
-    "lolly": {
+    "finny": {
       "command": "node",
-      "args": ["/Applications/nanoclaw/lolly-claude-plugin/bridge/dist/index.js"],
+      "args": ["/Applications/nanoclaw/finny-claude-plugin/bridge/dist/index.js"],
       "env": {
-        "OPENCLAW_URL": "http://127.0.0.1:18789",
-        "OPENCLAW_GATEWAY_TOKEN": "${env:LOLLY_GATEWAY_TOKEN}",
-        "OPENCLAW_MODEL": "openclaw"
+        "FINNY_UPSTREAM_URL": "http://127.0.0.1:8642",
+        "FINNY_UPSTREAM_TOKEN": "${env:FINNY_GATEWAY_TOKEN}",
+        "FINNY_MODEL": "hermes-agent"
       }
     }
   }

@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { OpenClawAuthProvider, OpenClawClientsStore } from '../../auth/provider.js';
+import { HermesAuthProvider, HermesClientsStore } from '../../auth/provider.js';
 
-describe('OpenClawClientsStore', () => {
+describe('HermesClientsStore', () => {
   it('returns pre-configured client by ID', async () => {
-    const store = new OpenClawClientsStore({ clientId: 'test-id', clientSecret: 'test-secret' });
+    const store = new HermesClientsStore({ clientId: 'test-id', clientSecret: 'test-secret' });
     const client = await store.getClient('test-id');
     expect(client).toBeDefined();
     expect(client?.client_id).toBe('test-id');
@@ -11,18 +11,18 @@ describe('OpenClawClientsStore', () => {
   });
 
   it('returns undefined for unknown client', async () => {
-    const store = new OpenClawClientsStore({ clientId: 'test-id', clientSecret: 'test-secret' });
+    const store = new HermesClientsStore({ clientId: 'test-id', clientSecret: 'test-secret' });
     const client = await store.getClient('unknown');
     expect(client).toBeUndefined();
   });
 
   it('does not support dynamic registration by default', () => {
-    const store = new OpenClawClientsStore({});
+    const store = new HermesClientsStore({});
     expect((store as any).registerClient).toBeUndefined();
   });
 
   it('exposes registerClient when allowDynamicRegistration is true', async () => {
-    const store = new OpenClawClientsStore({ allowDynamicRegistration: true });
+    const store = new HermesClientsStore({ allowDynamicRegistration: true });
     expect(typeof (store as any).registerClient).toBe('function');
 
     const dynamic = {
@@ -43,7 +43,7 @@ describe('OpenClawClientsStore', () => {
   });
 
   it('evicts oldest dynamically registered client when cap is exceeded', async () => {
-    const store = new OpenClawClientsStore({ allowDynamicRegistration: true });
+    const store = new HermesClientsStore({ allowDynamicRegistration: true });
     const register = (store as any).registerClient.bind(store);
     const makeClient = (id: string) => ({
       client_id: id,
@@ -66,7 +66,7 @@ describe('OpenClawClientsStore', () => {
   });
 
   it('serves both pre-configured and dynamically registered clients', async () => {
-    const store = new OpenClawClientsStore({
+    const store = new HermesClientsStore({
       clientId: 'preset',
       clientSecret: 'preset-secret',
       allowDynamicRegistration: true,
@@ -89,29 +89,29 @@ describe('OpenClawClientsStore', () => {
   });
 
   it('works with no pre-configured client', async () => {
-    const store = new OpenClawClientsStore({});
+    const store = new HermesClientsStore({});
     const client = await store.getClient('anything');
     expect(client).toBeUndefined();
   });
 
   it('accepts any redirect_uri for pre-configured client', async () => {
-    const store = new OpenClawClientsStore({ clientId: 'test-id', clientSecret: 'test-secret' });
+    const store = new HermesClientsStore({ clientId: 'test-id', clientSecret: 'test-secret' });
     const client = await store.getClient('test-id');
     expect(client?.redirect_uris.includes('http://any-uri.com/callback')).toBe(true);
     expect(client?.redirect_uris.includes('https://claude.ai/oauth/callback')).toBe(true);
   });
 });
 
-describe('OpenClawAuthProvider', () => {
+describe('HermesAuthProvider', () => {
   const config = { clientId: 'test-client', clientSecret: 'test-secret' };
 
   it('exposes clientsStore', () => {
-    const provider = new OpenClawAuthProvider(config);
-    expect(provider.clientsStore).toBeInstanceOf(OpenClawClientsStore);
+    const provider = new HermesAuthProvider(config);
+    expect(provider.clientsStore).toBeInstanceOf(HermesClientsStore);
   });
 
   it('full auth code flow: authorize → challenge → exchange → verify', async () => {
-    const provider = new OpenClawAuthProvider(config);
+    const provider = new HermesAuthProvider(config);
     const client = (await provider.clientsStore.getClient('test-client'))!;
     expect(client).toBeDefined();
 
@@ -162,7 +162,7 @@ describe('OpenClawAuthProvider', () => {
   });
 
   it('rejects invalid authorization code', async () => {
-    const provider = new OpenClawAuthProvider(config);
+    const provider = new HermesAuthProvider(config);
     const client = (await provider.clientsStore.getClient('test-client'))!;
 
     await expect(provider.exchangeAuthorizationCode(client, 'bad-code')).rejects.toThrow(
@@ -171,7 +171,7 @@ describe('OpenClawAuthProvider', () => {
   });
 
   it('rejects code exchange from wrong client', async () => {
-    const provider = new OpenClawAuthProvider(config);
+    const provider = new HermesAuthProvider(config);
     const client = (await provider.clientsStore.getClient('test-client'))!;
 
     // Authorize with the real client
@@ -201,14 +201,14 @@ describe('OpenClawAuthProvider', () => {
   });
 
   it('rejects expired or invalid access token', async () => {
-    const provider = new OpenClawAuthProvider(config);
+    const provider = new HermesAuthProvider(config);
     await expect(provider.verifyAccessToken('non-existent-token')).rejects.toThrow(
       'Invalid or expired token'
     );
   });
 
   it('refresh token flow works', async () => {
-    const provider = new OpenClawAuthProvider(config);
+    const provider = new HermesAuthProvider(config);
     const client = (await provider.clientsStore.getClient('test-client'))!;
 
     // Get initial tokens
@@ -247,7 +247,7 @@ describe('OpenClawAuthProvider', () => {
   });
 
   it('revoke token deletes it', async () => {
-    const provider = new OpenClawAuthProvider(config);
+    const provider = new HermesAuthProvider(config);
     const client = (await provider.clientsStore.getClient('test-client'))!;
 
     // Get tokens
@@ -279,7 +279,7 @@ describe('OpenClawAuthProvider', () => {
   });
 
   it('does not revoke tokens owned by another client', async () => {
-    const provider = new OpenClawAuthProvider(config);
+    const provider = new HermesAuthProvider(config);
     const client = (await provider.clientsStore.getClient('test-client'))!;
 
     let redirectUrl = '';

@@ -1,10 +1,10 @@
 ---
 name: finance:income-statement
-description: Generate a P&L / income statement for ShareChat. Maps to the blessed `p&l_statement` intent. User invocation: /lolly:finance:income-statement [scope hints]
+description: Generate a P&L / income statement for ShareChat. Maps to the blessed `p&l_statement` intent. User invocation: /finny:finance:income-statement [scope hints]
 argument-hint: "[entity] [period] (optional — decomposer will ask if missing)"
 ---
 
-# /lolly:finance:income-statement
+# /finny:finance:income-statement
 
 Generate a profit & loss statement for a ShareChat entity over a period.
 
@@ -17,9 +17,9 @@ This command maps to the blessed `p&l_statement` intent. Hand off to
 - `user_question: <the user's full request, including $ARGUMENTS>`
 
 The `intent-decomposer` skill owns:
-- Calling `lolly_query phase: 'discover'` if scope is incomplete.
+- Calling `finny_query phase: 'discover'` if scope is incomplete.
 - Driving an AskUser flow for missing variables (entity, period, consolidated, env).
-- Calling `lolly_query phase: 'execute'` with full scope.
+- Calling `finny_query phase: 'execute'` with full scope.
 - Handing the result to `judging-output`.
 
 ## Argument handling

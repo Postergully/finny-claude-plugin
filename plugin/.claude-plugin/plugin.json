@@ -1,11 +1,11 @@
 {
-  "name": "lolly",
-  "description": "Lolly NetSuite agent — cowork-side discipline for the lolly_* MCP tools (intent-decomposer, judging-output, day_dream synthesis)",
+  "name": "finny",
+  "description": "Finny NetSuite agent — cowork-side discipline for the finny_* MCP tools (intent-decomposer, judging-output, day_dream synthesis)",
   "version": "0.4.0",
   "author": {
     "name": "Postergully"
   },
-  "homepage": "https://github.com/Postergully/lolly-claude-plugin",
-  "repository": "https://github.com/Postergully/lolly-claude-plugin",
+  "homepage": "https://github.com/Postergully/finny-claude-plugin",
+  "repository": "https://github.com/Postergully/finny-claude-plugin",
   "license": "MIT"
 }

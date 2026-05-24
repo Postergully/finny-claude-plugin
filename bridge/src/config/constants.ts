@@ -1,9 +1,9 @@
 declare const __PKG_VERSION__: string;
 
-export const SERVER_NAME = 'openclaw-mcp';
+export const SERVER_NAME = 'hermes-mcp';
 export const SERVER_VERSION = __PKG_VERSION__;
-export const DEFAULT_OPENCLAW_URL = 'http://127.0.0.1:18789';
-export const DEFAULT_MODEL = 'openclaw';
+export const DEFAULT_FINNY_UPSTREAM_URL = 'http://127.0.0.1:8642';
+export const DEFAULT_MODEL = 'hermes';
 
 // Server icon: red claw on dark background — Base64 encoded SVG
 // 128x128 rounded rect with stylized claw/pincer icon

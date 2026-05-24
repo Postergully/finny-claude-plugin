@@ -1,4 +1,4 @@
-// SuiteQL write-verb guard + preamble builder for lolly_executeSuiteQL.
+// SuiteQL write-verb guard + preamble builder for finny_executeSuiteQL.
 //
 // Conservative posture: the regex fails CLOSED. False positives are
 // acceptable — a SELECT whose column is literally named `UPDATE_TS`
@@ -53,7 +53,7 @@ export function buildSuiteQLPreamble(params: SuiteQLPreambleParams): string {
     '```',
     ``,
     `Return a JSON envelope per the contract:`,
-    `- status: "ok" on success, "refused" if the query requests data Lolly cannot access`,
+    `- status: "ok" on success, "refused" if the query requests data Finny cannot access`,
     `- data.shape: "rows"`,
     `- data.columns: array of {name, type}`,
     `- data.rows: array of row arrays`,

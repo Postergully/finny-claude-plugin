@@ -5,7 +5,7 @@ import { z } from 'zod';
 // does NOT enforce per-variable type validation. Bridge enforces presence
 // only; `strict_nonempty: true` opts in to rejecting empty/whitespace-only
 // strings (the v1 stress test caught that empty `entity: ''` would pass
-// presence-only validation and propagate garbage into Lolly's prompt).
+// presence-only validation and propagate garbage into Finny's prompt).
 export const ScopeVarSchema = z.object({
   name: z.string().min(1),
   type: z.enum(['enum', 'bool', 'period', 'date', 'string', 'number']),
@@ -22,9 +22,9 @@ export type ScopeVar = z.infer<typeof ScopeVarSchema>;
 // answers reaching the user. Per-entry `version` + `aliases[]` handle
 // renames without coordinated brain-memory migrations.
 //
-// Notably absent: `discovery_prompt`. Discovery is Lolly's job — the bridge
-// does not write a paragraph for her. The bridge tells Lolly "discover for
-// intent X" and Lolly's brain answers.
+// Notably absent: `discovery_prompt`. Discovery is Finny's job — the bridge
+// does not write a paragraph for her. The bridge tells Finny "discover for
+// intent X" and Finny's brain answers.
 export const BlessListEntrySchema = z.object({
   id: z.string().min(1),
   version: z.string().min(1),

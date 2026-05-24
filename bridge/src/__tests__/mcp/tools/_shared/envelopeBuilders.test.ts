@@ -4,7 +4,7 @@ import {
   runningEnvelope,
   refusedEnvelope,
 } from '../../../../mcp/tools/_shared/envelopeBuilders.js';
-import { LollyEnvelopeSchema } from '../../../../types/envelope.js';
+import { FinnyEnvelopeSchema } from '../../../../types/envelope.js';
 
 describe('envelopeBuilders', () => {
   it('errorEnvelope produces a schema-valid error envelope', () => {
@@ -17,7 +17,7 @@ describe('envelopeBuilders', () => {
       sessionId: 'sess-1',
       intentRestated: 'test',
     });
-    const parsed = LollyEnvelopeSchema.safeParse(env);
+    const parsed = FinnyEnvelopeSchema.safeParse(env);
     expect(parsed.success).toBe(true);
     expect(env.status).toBe('error');
     expect(env.error?.code).toBe('gateway_unreachable');
@@ -32,7 +32,7 @@ describe('envelopeBuilders', () => {
       envUsed: 'production',
       sessionId: 'sess-x',
     });
-    const parsed = LollyEnvelopeSchema.safeParse(env);
+    const parsed = FinnyEnvelopeSchema.safeParse(env);
     expect(parsed.success).toBe(true);
     expect(env.error?.code).toBe('other');
     expect(env.error?.message).toBe('approval_required');
@@ -47,7 +47,7 @@ describe('envelopeBuilders', () => {
       sessionId: 'sess-2',
       deadlineExceededMs: 10_000,
     });
-    const parsed = LollyEnvelopeSchema.safeParse(env);
+    const parsed = FinnyEnvelopeSchema.safeParse(env);
     expect(parsed.success).toBe(true);
     expect(env.status).toBe('running');
     // Canonical location per §2.4: data.value carries the task_id
@@ -70,7 +70,7 @@ describe('envelopeBuilders', () => {
       envUsed: 'production',
       sessionId: '—',
     });
-    const parsed = LollyEnvelopeSchema.safeParse(env);
+    const parsed = FinnyEnvelopeSchema.safeParse(env);
     expect(parsed.success).toBe(true);
     expect(env.status).toBe('refused');
     expect(env.confidence_reason).toContain('DROP');

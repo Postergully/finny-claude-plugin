@@ -37,7 +37,7 @@ describe('buildCorrectionPrompt', () => {
 
   it('renders Zod issue paths and messages as a bulleted list', () => {
     // Build a Zod failure where multiple required fields are missing — the
-    // exact shape Lolly produces under deadline pressure (truncated JSON
+    // exact shape Finny produces under deadline pressure (truncated JSON
     // tail, M3 Scenario 08 carry-forward).
     const schema = z.object({
       assumptions: z.array(z.string()),
@@ -49,7 +49,7 @@ describe('buildCorrectionPrompt', () => {
 
     const prompt = buildCorrectionPrompt('garbage', result.error.issues);
 
-    // Each missing field is named by path so Lolly has a concrete target.
+    // Each missing field is named by path so Finny has a concrete target.
     expect(prompt).toContain('assumptions:');
     expect(prompt).toContain('confidence:');
     expect(prompt).toContain('confidence_reason:');

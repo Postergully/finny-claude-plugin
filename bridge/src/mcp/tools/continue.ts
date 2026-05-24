@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { LollyEnvelope } from '../../types/envelope.js';
+import type { FinnyEnvelope } from '../../types/envelope.js';
 import { taskManager } from '../tasks/manager.js';
 import { ensureTaskWorker, awaitTaskOrEscalate } from './_shared/taskWorker.js';
 import type { RunQueryParams } from './_shared/chatPipeline.js';
@@ -33,24 +33,24 @@ export const continueInputSchema = z.object({
 
 export type ContinueInput = z.infer<typeof continueInputSchema>;
 
-async function handler(rawInput: ContinueInput): Promise<LollyEnvelope> {
+async function handler(rawInput: ContinueInput): Promise<FinnyEnvelope> {
   const input = continueInputSchema.parse(rawInput);
 
   const conv = getConversation(input.conversation_id);
   if (!conv) {
-    // Lolly's session has likely also expired or the conversation was never
-    // registered. Cowork should restart from a fresh lolly_query call.
+    // Finny's session has likely also expired or the conversation was never
+    // registered. Cowork should restart from a fresh finny_query call.
     return errorEnvelope({
       code: 'gateway_rejected',
       message:
         `Unknown or expired conversation_id: ${input.conversation_id}. ` +
-        `Restart from lolly_query (the bridge keeps conversations in memory only; ` +
+        `Restart from finny_query (the bridge keeps conversations in memory only; ` +
         `30-min idle eviction or bridge restart drops in-flight conversations).`,
       retryable: false,
       elapsedMs: 0,
       envUsed: 'production',
       sessionId: '—',
-      intentRestated: 'lolly_continue',
+      intentRestated: 'finny_continue',
     });
   }
 
@@ -65,7 +65,7 @@ async function handler(rawInput: ContinueInput): Promise<LollyEnvelope> {
       intent_restated: conv.intent_string ?? conv.user_question.slice(0, 200),
       assumptions: [],
       unanswered: [
-        `Lolly asked for clarification ${MAX_ROUNDS} times without resolving the request — capped to prevent infinite loops. ` +
+        `Finny asked for clarification ${MAX_ROUNDS} times without resolving the request — capped to prevent infinite loops. ` +
           `Caller should rephrase the question or break it into smaller pieces.`,
       ],
       data: {
@@ -80,7 +80,7 @@ async function handler(rawInput: ContinueInput): Promise<LollyEnvelope> {
       elapsed_ms: 0,
       env_used: 'production',
       bridge_version: '0.0.1',
-      lolly_session_id: '—',
+      finny_session_id: '—',
     };
   }
 
@@ -135,9 +135,9 @@ async function handler(rawInput: ContinueInput): Promise<LollyEnvelope> {
 }
 
 export const continueTool = {
-  name: 'lolly_continue' as const,
+  name: 'finny_continue' as const,
   description:
-    "Resume a Lolly conversation that returned status: needs_input. Provide the conversation_id from the needs_input envelope and the user's response (either selected_option from the offered options OR a free-form answer). The bridge re-injects the original intent + scope + new clarification and resumes execution. Capped at 3 needs_input rounds — after that the bridge returns status: partial with unanswered[] populated. Async by default: if work exceeds deadline_ms, returns status: running with task_id — poll via lolly_task_status.",
+    "Resume a Finny conversation that returned status: needs_input. Provide the conversation_id from the needs_input envelope and the user's response (either selected_option from the offered options OR a free-form answer). The bridge re-injects the original intent + scope + new clarification and resumes execution. Capped at 3 needs_input rounds — after that the bridge returns status: partial with unanswered[] populated. Async by default: if work exceeds deadline_ms, returns status: running with task_id — poll via finny_task_status.",
   inputSchema: continueInputSchema,
   handler,
 };

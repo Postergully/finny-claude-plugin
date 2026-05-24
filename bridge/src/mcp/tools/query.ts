@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { LollyEnvelope } from '../../types/envelope.js';
+import type { FinnyEnvelope } from '../../types/envelope.js';
 import { taskManager } from '../tasks/manager.js';
 import { ensureTaskWorker, awaitTaskOrEscalate } from './_shared/taskWorker.js';
 import type { RunQueryParams } from './_shared/chatPipeline.js';
@@ -16,7 +16,7 @@ export const queryInputSchema = z
     question: z.string().min(1).optional(),
 
     // New: intent-driven path. Open string — bless-list match is checked at
-    // runtime in the handler, NOT via z.enum. Cowork (or Lolly herself) can
+    // runtime in the handler, NOT via z.enum. Cowork (or Finny herself) can
     // name new intents without a bridge release.
     intent: z.string().min(1).optional(),
     phase: z.enum(['discover', 'execute']).default('execute'),
@@ -51,12 +51,12 @@ export const queryInputSchema = z
 
 export type QueryInput = z.infer<typeof queryInputSchema>;
 
-async function handler(rawInput: QueryInput): Promise<LollyEnvelope> {
+async function handler(rawInput: QueryInput): Promise<FinnyEnvelope> {
   const input = queryInputSchema.parse(rawInput);
   const envUsed: 'sandbox' | 'production' = input.entity_hints?.env ?? 'production';
   const principal = input.sessionId ?? `m2-default:${envUsed}`;
 
-  // The textual question carried into Lolly's prompt: prefer user_question
+  // The textual question carried into Finny's prompt: prefer user_question
   // (verbatim user phrasing the cowork plugin captured), fall back to legacy
   // question, finally to the intent string itself if neither is present.
   const questionText = input.user_question ?? input.question ?? input.intent ?? '';
@@ -70,7 +70,7 @@ async function handler(rawInput: QueryInput): Promise<LollyEnvelope> {
       intentRestated: questionText.slice(0, 200),
       reason:
         `Refused: question names destructive verb '${destructive.verb}' applied to ` +
-        `NetSuite entity '${destructive.entity}'. Lolly is read-only against NetSuite; ` +
+        `NetSuite entity '${destructive.entity}'. Finny is read-only against NetSuite; ` +
         `write operations require a separate governance review. Rephrase as a read-only ` +
         `question (e.g. "list overdue vendor bills") or escalate via a workflow that ` +
         `supports writes.`,
@@ -83,7 +83,7 @@ async function handler(rawInput: QueryInput): Promise<LollyEnvelope> {
   }
 
   // Gate 1 — bless-list scope enforcement on execute phase.
-  // Open intents (lookupIntent returns null) skip this gate entirely; Lolly
+  // Open intents (lookupIntent returns null) skip this gate entirely; Finny
   // handles missing scope downstream via needs_input (Track F) or partial.
   const blessed = lookupIntent(input.intent);
   if (blessed && input.phase === 'execute') {
@@ -94,7 +94,7 @@ async function handler(rawInput: QueryInput): Promise<LollyEnvelope> {
         message:
           `Missing required scope for intent '${input.intent}' (v${blessed.version}): ` +
           `${result.missing.join(', ')}. ` +
-          `Call lolly_query again with phase: 'discover' for guidance on these variables.`,
+          `Call finny_query again with phase: 'discover' for guidance on these variables.`,
         retryable: true,
         elapsedMs: 0,
         envUsed,
@@ -137,12 +137,12 @@ async function handler(rawInput: QueryInput): Promise<LollyEnvelope> {
 }
 
 export const queryTool = {
-  name: 'lolly_query' as const,
+  name: 'finny_query' as const,
   description:
-    'Ask Lolly a ShareChat/NetSuite question. Two modes:\n' +
-    "(1) Intent-driven (recommended): pass `intent` as a free-form string + `phase`. Use `phase: 'discover'` first when you don't know what variables matter — Lolly returns a narrative envelope listing the variables to gather + brain-derived hints + example clarifying questions. Use `phase: 'execute'` once cowork has resolved scope with the user. A small set of canonical intents (p&l_statement, vendor_balance, cash_position, transaction_lookup) have required scope enforced at the bridge edge — calling `phase: 'execute'` for these without resolving scope returns `error.code: 'wrong_tool'` with the missing variables. Other `intent` values pass through; Lolly handles them.\n" +
-    '(2) Free-form (legacy): pass `question: string`. Lolly answers as best she can.\n' +
-    "Async by default: if work exceeds `deadline_ms`, returns `status: 'running'` with `task_id` in `data.value` — poll via `lolly_task_status`.",
+    'Ask Finny a ShareChat/NetSuite question. Two modes:\n' +
+    "(1) Intent-driven (recommended): pass `intent` as a free-form string + `phase`. Use `phase: 'discover'` first when you don't know what variables matter — Finny returns a narrative envelope listing the variables to gather + brain-derived hints + example clarifying questions. Use `phase: 'execute'` once cowork has resolved scope with the user. A small set of canonical intents (p&l_statement, vendor_balance, cash_position, transaction_lookup) have required scope enforced at the bridge edge — calling `phase: 'execute'` for these without resolving scope returns `error.code: 'wrong_tool'` with the missing variables. Other `intent` values pass through; Finny handles them.\n" +
+    '(2) Free-form (legacy): pass `question: string`. Finny answers as best she can.\n' +
+    "Async by default: if work exceeds `deadline_ms`, returns `status: 'running'` with `task_id` in `data.value` — poll via `finny_task_status`.",
   inputSchema: queryInputSchema,
   handler,
 };

@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { OpenClawClient } from '../../openclaw/client.js';
-import { LollyEnvelopeSchema, type LollyEnvelope } from '../../types/envelope.js';
-import { DEFAULT_OPENCLAW_URL, DEFAULT_MODEL } from '../../config/constants.js';
+import { HermesClient } from '../../hermes/client.js';
+import { FinnyEnvelopeSchema, type FinnyEnvelope } from '../../types/envelope.js';
+import { DEFAULT_FINNY_UPSTREAM_URL, DEFAULT_MODEL } from '../../config/constants.js';
 import { detectWriteVerb, buildSuiteQLPreamble } from './_shared/suiteqlGuard.js';
 import { extractEnvelopeJSON } from './_shared/parseEnvelope.js';
 import { getOrCreateSession } from './_shared/sessionStore.js';
@@ -22,18 +22,18 @@ export const executeSuiteQLInputSchema = z.object({
 export type ExecuteSuiteQLInput = z.infer<typeof executeSuiteQLInputSchema>;
 
 function getGatewayUrl(): string {
-  return process.env.OPENCLAW_URL || DEFAULT_OPENCLAW_URL;
+  return process.env.FINNY_UPSTREAM_URL || DEFAULT_FINNY_UPSTREAM_URL;
 }
 
 function getGatewayToken(): string | undefined {
-  return process.env.LOLLY_GATEWAY_TOKEN || process.env.OPENCLAW_GATEWAY_TOKEN;
+  return process.env.FINNY_GATEWAY_TOKEN || process.env.FINNY_UPSTREAM_TOKEN;
 }
 
 function getModel(): string {
-  return process.env.OPENCLAW_MODEL || DEFAULT_MODEL;
+  return process.env.FINNY_MODEL || DEFAULT_MODEL;
 }
 
-async function handler(rawInput: ExecuteSuiteQLInput): Promise<LollyEnvelope> {
+async function handler(rawInput: ExecuteSuiteQLInput): Promise<FinnyEnvelope> {
   const input = executeSuiteQLInputSchema.parse(rawInput);
   const envUsed = input.env;
   const intentRestated = `Execute SuiteQL: ${input.reason.slice(0, 160)}`;
@@ -43,7 +43,7 @@ async function handler(rawInput: ExecuteSuiteQLInput): Promise<LollyEnvelope> {
   if (writeVerb) {
     return refusedEnvelope({
       intentRestated,
-      reason: `SQL contains write verb '${writeVerb}'. Only read-only SuiteQL is supported in lolly_executeSuiteQL. Write operations require a separate governance review.`,
+      reason: `SQL contains write verb '${writeVerb}'. Only read-only SuiteQL is supported in finny_executeSuiteQL. Write operations require a separate governance review.`,
       envUsed,
       sessionId: '—',
       elapsedMs: 0,
@@ -64,7 +64,7 @@ async function handler(rawInput: ExecuteSuiteQLInput): Promise<LollyEnvelope> {
   const url = getGatewayUrl();
   const token = getGatewayToken();
   const model = getModel();
-  const client = new OpenClawClient(url, token, SUITEQL_DEADLINE_MS, model);
+  const client = new HermesClient(url, token, SUITEQL_DEADLINE_MS, model);
 
   const combined = `${preamble}\n\n---\n\n${input.sql}`;
   const reqShape = {
@@ -122,12 +122,12 @@ async function handler(rawInput: ExecuteSuiteQLInput): Promise<LollyEnvelope> {
     });
   }
 
-  const validation = LollyEnvelopeSchema.safeParse({
+  const validation = FinnyEnvelopeSchema.safeParse({
     ...(parsed as object),
     elapsed_ms: Date.now() - started,
     env_used: envUsed,
     bridge_version: BRIDGE_VERSION,
-    lolly_session_id: sessionId,
+    finny_session_id: sessionId,
   });
   if (validation.success) {
     return validation.data;
@@ -146,9 +146,9 @@ async function handler(rawInput: ExecuteSuiteQLInput): Promise<LollyEnvelope> {
 }
 
 export const executeSuiteQLTool = {
-  name: 'lolly_executeSuiteQL' as const,
+  name: 'finny_executeSuiteQL' as const,
   description:
-    "Execute a read-only SuiteQL statement against Lolly's configured NetSuite environment. Sync path — direct chat call, not async via taskManager (SuiteQL returns in seconds; for minutes-long natural-language questions, use lolly_query). Write verbs (DROP/DELETE/UPDATE/INSERT/ALTER/TRUNCATE/CREATE/GRANT/REVOKE/MERGE/REPLACE) rejected in-bridge before any gateway call.",
+    "Execute a read-only SuiteQL statement against Finny's configured NetSuite environment. Sync path — direct chat call, not async via taskManager (SuiteQL returns in seconds; for minutes-long natural-language questions, use finny_query). Write verbs (DROP/DELETE/UPDATE/INSERT/ALTER/TRUNCATE/CREATE/GRANT/REVOKE/MERGE/REPLACE) rejected in-bridge before any gateway call.",
   inputSchema: executeSuiteQLInputSchema,
   handler,
 };
