@@ -1,0 +1,18 @@
+[Unit]
+Description=Finny MCP Bridge (OAuth 2.1 + SSE on 127.0.0.1:3000)
+After=network-online.target hermes-api.service
+Wants=network-online.target
+Requires=hermes-api.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/finny/bridge
+EnvironmentFile=/opt/finny/bridge/.env
+ExecStart=/usr/bin/node /opt/finny/bridge/dist/index.js --transport sse --port 3000 --host 127.0.0.1
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

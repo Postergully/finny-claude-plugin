@@ -1,0 +1,17 @@
+[Unit]
+Description=Hermes Agent API Server (OpenAI-compatible) for Finny
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu
+EnvironmentFile=/home/ubuntu/.hermes/.env
+ExecStart=/home/ubuntu/hermes-venv/bin/hermes gateway
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
