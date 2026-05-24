@@ -35,7 +35,7 @@
       "Action": [
         "route53:ChangeResourceRecordSets"
       ],
-      "Resource": "arn:aws:route53:::hostedzone/REPLACE_WITH_11MIRROR_HOSTED_ZONE_ID"
+      "Resource": "arn:aws:route53:::hostedzone/Z0839152EVU8QUH8CT1I"
     }
   ]
 }

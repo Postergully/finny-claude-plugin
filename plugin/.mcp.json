@@ -2,7 +2,7 @@
   "mcpServers": {
     "finny": {
       "type": "http",
-      "url": "https://finny.11mirror.com/mcp"
+      "url": "https://finny.prod.11mirror.com/mcp"
     }
   }
 }

@@ -7,11 +7,11 @@ Hermes EC2 instance (`i-0ef58962b09d490ee`, us-east-1).
 
 - `systemd/hermes-api.service` — runs `hermes gateway` (Hermes API server, loopback :8642)
 - `systemd/finny-mcp.service` — runs the bridge (loopback :3000, OAuth 2.1)
-- `caddy/Caddyfile` — public TLS endpoint at `finny.11mirror.com`
+- `caddy/Caddyfile` — public TLS endpoint at `finny.prod.11mirror.com`
 - `iam/finny-additions.json` — extra statements added to the `HermesDeploy` IAM policy
 
-Before applying `iam/finny-additions.json`, replace `REPLACE_WITH_11MIRROR_HOSTED_ZONE_ID`
-with the real Route 53 hosted zone ID for `11mirror.com` (without the `/hostedzone/` prefix).
+The IAM additions are scoped to the `prod.11mirror.com` hosted zone
+(`Z0839152EVU8QUH8CT1I`). The public hostname is `finny.prod.11mirror.com`.
 
 ## Deploy procedure
 

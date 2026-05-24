@@ -1,4 +1,4 @@
-finny.11mirror.com {
+finny.prod.11mirror.com {
     encode gzip
     reverse_proxy 127.0.0.1:3000 {
         header_up Host {host}
