@@ -113,7 +113,14 @@ export async function createHttpServer(
   const streamableSessions = new Map<string, StreamableSession>();
 
   // Express app from SDK (includes JSON body parser + DNS rebinding protection)
-  const app = createMcpExpressApp({ host: config.host });
+  const appAllowedHosts = (process.env.MCP_ALLOWED_HOSTS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const app = createMcpExpressApp({
+    host: config.host,
+    ...(appAllowedHosts.length > 0 ? { allowedHosts: appAllowedHosts } : {}),
+  });
 
   // Trust the first proxy hop (Cloudflare / ngrok / reverse proxy) so
   // express-rate-limit can read X-Forwarded-For without throwing
