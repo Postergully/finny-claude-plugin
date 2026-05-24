@@ -10,7 +10,9 @@ User=ubuntu
 Group=ubuntu
 WorkingDirectory=/opt/finny/bridge
 EnvironmentFile=/opt/finny/bridge/.env
-ExecStart=/usr/bin/node /opt/finny/bridge/dist/index.js --transport sse --port 3000 --host 127.0.0.1
+Environment=HOST=127.0.0.1
+Environment=PORT=3000
+ExecStart=/usr/bin/node /opt/finny/bridge/dist/index.js --transport http
 Restart=on-failure
 RestartSec=5
 
