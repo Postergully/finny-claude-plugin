@@ -98,6 +98,7 @@ async function chat(params: {
       taskId: params.taskId,
     });
     const latencyMs = Date.now() - started;
+    // NOTE: when taskId triggers finny_progress round-trips, latency_ms and response_chars aggregate across all dispatcher iterations (≤MAX_LOOPS); messages_count:2 reflects the initial request only.
     logGatewayCall(reqShape, {
       status: 200,
       latency_ms: latencyMs,

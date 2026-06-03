@@ -31,6 +31,7 @@ vi.mock('../../../../mcp/tools/_shared/gatewayLog.js', () => ({
 
 const { runQuery } = await import('../../../../mcp/tools/_shared/chatPipeline.js');
 const { lookupIntent } = await import('../../../../intents/loader.js');
+const { taskManager } = await import('../../../../mcp/tasks/manager.js');
 
 function fenced(json: object): string {
   return '```json\n' + JSON.stringify(json) + '\n```';
@@ -502,5 +503,100 @@ describe('chatPipeline.runQuery — discover violation surfacing (Track G)', () 
 
     // Execute is supposed to query NetSuite — no annotation expected.
     expect(env.confidence_reason).toBe('live SuiteQL aggregate');
+  });
+});
+
+describe('chatPipeline.runQuery — tool dispatcher contract (Track S)', () => {
+  beforeEach(() => chatMock.mockReset());
+
+  it('runQuery with taskId calls HermesClient.chat with {messages, tools:[finny_progress], sessionId} and routes finny_progress tool_calls to taskManager', async () => {
+    // Pre-create a running task so updateProgress will accept writes.
+    const task = taskManager.create({ type: 'chat', input: {} });
+    taskManager.updateStatus(task.id, 'running');
+
+    // The dispatcher mutates the messages array in place across iterations,
+    // so capture a snapshot of the initial-turn shape before the tool-call
+    // round-trip appends to it.
+    let initialTurnSnapshot: {
+      messages: Array<{ role: string; content: string | null }>;
+      tools?: Array<{ function: { name: string } }>;
+      sessionId: string;
+    } | null = null;
+
+    // Turn 1: assistant emits a finny_progress tool_call (no content yet).
+    chatMock.mockImplementationOnce((...args: ChatCall) => {
+      const a = args[0] as {
+        messages: Array<{ role: string; content: string | null }>;
+        tools?: Array<{ function: { name: string } }>;
+        sessionId: string;
+      };
+      initialTurnSnapshot = {
+        messages: a.messages.map((m) => ({ ...m })),
+        tools: a.tools,
+        sessionId: a.sessionId,
+      };
+      return Promise.resolve({
+        response: '',
+        model: 'mock',
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'finny_progress',
+              arguments: JSON.stringify({ text: 'querying NetSuite' }),
+            },
+          },
+        ],
+      });
+    });
+
+    // Turn 2: assistant returns the final envelope (no more tool_calls).
+    chatMock.mockResolvedValueOnce({
+      response: fenced({
+        status: 'ok',
+        intent_restated: 'mocked',
+        assumptions: [],
+        unanswered: [],
+        data: { shape: 'scalar', value: 1 },
+        sources: [],
+        confidence: 'high',
+        confidence_reason: 'mock',
+        env_used: 'production',
+      }),
+      model: 'mock',
+    });
+
+    const env = await runQuery({
+      question: 'whatever',
+      expected_shape: 'scalar',
+      sessionPrincipal: 'test:production',
+      deadlineMs: 30_000,
+      taskId: task.id,
+    });
+
+    expect(env.status).toBe('ok');
+
+    // Initial turn shape: {messages:[system,user], tools:[finny_progress], sessionId}.
+    expect(initialTurnSnapshot).not.toBeNull();
+    const initial = initialTurnSnapshot!;
+    expect(Array.isArray(initial.messages)).toBe(true);
+    expect(initial.messages).toHaveLength(2);
+    expect(initial.messages[0]?.role).toBe('system');
+    expect(initial.messages[1]?.role).toBe('user');
+    expect(initial.tools).toBeDefined();
+    expect(initial.tools?.[0]?.function.name).toBe('finny_progress');
+    expect(initial.sessionId).toBeTypeOf('string');
+    expect(initial.sessionId.length).toBeGreaterThan(0);
+
+    // taskId propagation: the dispatcher routed the tool_call to taskManager.
+    const updated = taskManager.get(task.id);
+    expect(updated?.progress).toBe('querying NetSuite');
+    expect(updated?.progressUpdatedAt).toBeInstanceOf(Date);
+
+    // The dispatcher made two upstream calls (tool turn + final).
+    expect(chatMock).toHaveBeenCalledTimes(2);
+
+    taskManager.delete(task.id);
   });
 });
