@@ -1,8 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock the gateway client so we can hand-craft Finny responses turn-by-turn.
+// After Task 3, chat() accepts both the legacy single-string signature and
+// the new {messages, tools, sessionId} overload.
+type ChatCall =
+  | [string, string | undefined]
+  | [
+      {
+        messages: Array<{ role: string; content: string | null }>;
+        tools?: unknown[];
+        sessionId: string;
+      },
+    ];
+
 const chatMock = vi.hoisted(() =>
-  vi.fn<(message: string, sessionId?: string) => Promise<{ response: string; model: string }>>()
+  vi.fn<
+    (...args: ChatCall) => Promise<{ response: string; model: string; tool_calls?: unknown[] }>
+  >()
 );
 vi.mock('../../../../hermes/client.js', () => ({
   HermesClient: vi.fn().mockImplementation(() => ({
@@ -20,6 +34,25 @@ const { lookupIntent } = await import('../../../../intents/loader.js');
 
 function fenced(json: object): string {
   return '```json\n' + JSON.stringify(json) + '\n```';
+}
+
+// Helper to extract the prompt text from a chat() call. After Task 5, chat()
+// uses the new {messages, tools, sessionId} shape. The system and user
+// messages are in messages[0] and messages[1].
+function extractPrompt(callArgs: unknown[]): string {
+  const first = callArgs[0];
+  if (typeof first === 'string') {
+    // Legacy single-string shape (pre-Task 5). Tests shouldn't hit this
+    // path anymore, but defensive.
+    return first;
+  }
+  if (typeof first === 'object' && first !== null && 'messages' in first) {
+    const msgs = (first as { messages: Array<{ role: string; content: string | null }> }).messages;
+    const systemMsg = msgs.find((m) => m.role === 'system')?.content ?? '';
+    const userMsg = msgs.find((m) => m.role === 'user')?.content ?? '';
+    return `${systemMsg}\n\n---\n\n${userMsg}`;
+  }
+  return '[object Object]'; // fallback to match the old behavior for debugging
 }
 
 describe('chatPipeline.runQuery — schema-aware correction retry (Track D)', () => {
@@ -70,9 +103,7 @@ describe('chatPipeline.runQuery — schema-aware correction retry (Track D)', ()
 
     // The second call's combined-prompt argument is the correction prompt.
     // Pull every chat invocation's user-facing combined string.
-    const correctionInvocation = chatMock.mock.calls[1]?.[0];
-    expect(correctionInvocation).toBeTruthy();
-    const correctionText = String(correctionInvocation);
+    const correctionText = extractPrompt(chatMock.mock.calls[1] ?? []);
 
     // Track D's contract: each missing field is named by path on its own
     // bullet line so Finny has a concrete target to repair.
@@ -116,7 +147,7 @@ describe('chatPipeline.runQuery — schema-aware correction retry (Track D)', ()
 
     expect(env.status).toBe('ok');
     expect(chatMock).toHaveBeenCalledTimes(2);
-    const correctionText = String(chatMock.mock.calls[1]?.[0]);
+    const correctionText = extractPrompt(chatMock.mock.calls[1] ?? []);
     // Static-string path: the legacy "Response did not contain a valid JSON
     // envelope." message is preserved for the no-JSON-at-all case.
     expect(correctionText).toContain('Response did not contain a valid JSON envelope.');
@@ -172,7 +203,7 @@ describe('chatPipeline.runQuery — two-phase system prompt content (Track E)', 
       phase: 'discover',
     });
 
-    const promptSent = String(chatMock.mock.calls[0]?.[0]);
+    const promptSent = extractPrompt(chatMock.mock.calls[0] ?? []);
     expect(promptSent).toContain('DISCOVERY mode');
     expect(promptSent).toContain('"p&l_statement"');
     expect(promptSent).toContain('give me P&L');
@@ -200,7 +231,7 @@ describe('chatPipeline.runQuery — two-phase system prompt content (Track E)', 
       phase: 'discover',
     });
 
-    const promptSent = String(chatMock.mock.calls[0]?.[0]);
+    const promptSent = extractPrompt(chatMock.mock.calls[0] ?? []);
     expect(promptSent).toContain('DISCOVERY mode');
     expect(promptSent).toContain('NOT in the bless-list');
     expect(promptSent).toContain('cash_decline_root_cause');
@@ -228,7 +259,7 @@ describe('chatPipeline.runQuery — two-phase system prompt content (Track E)', 
       clarifications_resolved: ['User confirmed standalone ShareChat'],
     });
 
-    const promptSent = String(chatMock.mock.calls[0]?.[0]);
+    const promptSent = extractPrompt(chatMock.mock.calls[0] ?? []);
     expect(promptSent).toContain('caller wants you to RUN');
     expect(promptSent).toContain('"sharechat"');
     expect(promptSent).toContain('"consolidated": false');
@@ -251,7 +282,7 @@ describe('chatPipeline.runQuery — two-phase system prompt content (Track E)', 
       scope: { hint: 'last week' },
     });
 
-    const promptSent = String(chatMock.mock.calls[0]?.[0]);
+    const promptSent = extractPrompt(chatMock.mock.calls[0] ?? []);
     expect(promptSent).toContain('caller wants you to RUN');
     expect(promptSent).toContain('not in the bless-list');
     expect(promptSent).toContain('"investigation"');
@@ -320,7 +351,7 @@ describe('chatPipeline.runQuery — two-phase system prompt content (Track E)', 
       // No intent_string; no phase; default behavior.
     });
 
-    const promptSent = String(chatMock.mock.calls[0]?.[0]);
+    const promptSent = extractPrompt(chatMock.mock.calls[0] ?? []);
     // Legacy preamble starts with "You are Finny, a ShareChat NetSuite ERP agent."
     expect(promptSent).toContain('You are Finny, a ShareChat NetSuite ERP agent');
     // Phase markers should NOT appear in free_form.
