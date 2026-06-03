@@ -41,6 +41,12 @@ export interface RunQueryParams {
   phase?: 'discover' | 'execute' | 'free_form';
   scope?: Record<string, unknown>;
   clarifications_resolved?: string[];
+  /**
+   * Track S: when set, finny_progress tool_calls during this run are
+   * dispatched to taskManager.updateProgress(taskId, text). When undefined
+   * (synchronous fast-path queries), progress dispatch is a no-op.
+   */
+  taskId?: string;
 }
 
 function getGatewayUrl(): string {
