@@ -10,6 +10,10 @@ import { HermesClient } from '../../../hermes/client.js';
 describe('finny_progress end-to-end', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    // Best-effort cleanup of any tasks from prior tests.
+    for (const t of taskManager.list()) {
+      taskManager.delete(t.id);
+    }
   });
 
   it('progress strings flow from tool_call to running envelope', async () => {
