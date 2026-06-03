@@ -30,6 +30,8 @@ describe('buildQuerySystemPrompt', () => {
     });
     expect(prompt).toContain('finny_progress');
     expect(prompt).toContain('phase boundaries');
+    expect(prompt).toContain('finny_progress({text: "querying NetSuite VendBill"})');
+    expect(prompt).toContain('Aim for 3-6 emits');
   });
 
   it('does NOT include finny_progress instruction during discover phase', () => {
