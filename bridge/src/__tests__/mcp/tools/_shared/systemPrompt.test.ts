@@ -20,4 +20,25 @@ describe('buildQuerySystemPrompt', () => {
     const p = buildQuerySystemPrompt({ expected_shape: 'narrative' });
     expect(p).toMatch(/single.*json/i);
   });
+
+  it('includes finny_progress instruction during execute phase', () => {
+    const prompt = buildQuerySystemPrompt({
+      expected_shape: 'rows',
+      phase: 'execute',
+      intent_string: 'vendor_balance',
+      user_question: 'open balance for MTPL',
+    });
+    expect(prompt).toContain('finny_progress');
+    expect(prompt).toContain('phase boundaries');
+  });
+
+  it('does NOT include finny_progress instruction during discover phase', () => {
+    const prompt = buildQuerySystemPrompt({
+      expected_shape: 'rows',
+      phase: 'discover',
+      intent_string: 'vendor_balance',
+      user_question: 'open balance',
+    });
+    expect(prompt).not.toContain('finny_progress');
+  });
 });
