@@ -19,6 +19,8 @@ import {
 } from '../progress.js';
 import { log } from '../../../utils/logger.js';
 
+// Defensive cap. Finny emits ≤6 progress strings per query in practice;
+// 10 leaves headroom without letting a runaway loop burn upstream budget.
 const MAX_LOOPS = 10;
 
 export interface RunChatWithToolsParams {
@@ -60,7 +62,10 @@ export async function runChatWithTools(
       tool_calls: result.tool_calls,
     });
 
-    // Execute each tool_call; append a tool result for each.
+    // Execute each tool_call sequentially. finny_progress is idempotent
+    // (last-write-wins on the task record), so order within a single
+    // assistant turn doesn't matter. If a future tool has side effects
+    // that require parallel or ordered semantics, revisit this.
     for (const call of result.tool_calls) {
       const toolResult = await dispatchToolCall(call, params.taskId);
       messages.push({
