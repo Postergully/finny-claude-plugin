@@ -4,7 +4,31 @@ import type {
   HermesHealthResponse,
   HermesChatResponse,
   OpenAIChatCompletionResponse,
+  OpenAIToolCall,
 } from './types.js';
+
+export interface OpenAIMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
+  name?: string;
+  tool_calls?: OpenAIToolCall[];
+  tool_call_id?: string;
+}
+
+export interface OpenAIToolDef {
+  type: 'function';
+  function: {
+    name: string;
+    description?: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
+export interface ChatWithToolsParams {
+  messages: OpenAIMessage[];
+  tools?: OpenAIToolDef[];
+  sessionId?: string;
+}
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_RESPONSE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
@@ -174,9 +198,7 @@ export class HermesClient {
         throw error;
       }
       if (error instanceof DOMException && error.name === 'AbortError') {
-        throw new HermesConnectionError(
-          `Request to Hermes timed out after ${this.timeoutMs}ms`
-        );
+        throw new HermesConnectionError(`Request to Hermes timed out after ${this.timeoutMs}ms`);
       }
       throw new HermesConnectionError(
         `Failed to connect to Hermes at ${this.baseUrl}: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -266,9 +288,7 @@ export class HermesClient {
       return { status: 'error', message: `Gateway error (HTTP ${response.status})` };
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
-        throw new HermesConnectionError(
-          `Request to Hermes timed out after ${this.timeoutMs}ms`
-        );
+        throw new HermesConnectionError(`Request to Hermes timed out after ${this.timeoutMs}ms`);
       }
       throw new HermesConnectionError(
         `Failed to connect to Hermes at ${this.baseUrl}: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -281,21 +301,35 @@ export class HermesClient {
   /**
    * Send a chat message via the OpenAI-compatible /v1/chat/completions endpoint.
    */
-  async chat(message: string, sessionId?: string): Promise<HermesChatResponse> {
+  async chat(message: string, sessionId?: string): Promise<HermesChatResponse>;
+  async chat(params: ChatWithToolsParams): Promise<HermesChatResponse>;
+  async chat(
+    messageOrParams: string | ChatWithToolsParams,
+    sessionId?: string
+  ): Promise<HermesChatResponse> {
+    let messages: OpenAIMessage[];
+    let tools: OpenAIToolDef[] | undefined;
+    let effectiveSessionId: string | undefined;
+
+    if (typeof messageOrParams === 'string') {
+      messages = [{ role: 'user', content: messageOrParams }];
+      effectiveSessionId = sessionId;
+    } else {
+      messages = messageOrParams.messages;
+      tools = messageOrParams.tools;
+      effectiveSessionId = messageOrParams.sessionId;
+    }
+
     const body: Record<string, unknown> = {
       model: this.model,
-      messages: [{ role: 'user', content: message }],
+      messages,
       max_tokens: 4096,
     };
-
-    if (sessionId) {
-      body.session_id = sessionId;
-    }
+    if (tools && tools.length > 0) body.tools = tools;
+    if (effectiveSessionId) body.session_id = effectiveSessionId;
 
     const headers: Record<string, string> = {};
-    if (sessionId) {
-      headers['x-hermes-session-key'] = sessionId;
-    }
+    if (effectiveSessionId) headers['x-hermes-session-key'] = effectiveSessionId;
 
     const completion = await this.request<OpenAIChatCompletionResponse>('/v1/chat/completions', {
       method: 'POST',
@@ -303,12 +337,15 @@ export class HermesClient {
       headers,
     });
 
-    const content = completion.choices?.[0]?.message?.content ?? '';
+    const choice = completion.choices?.[0];
+    const content = choice?.message?.content ?? '';
+    const tool_calls = choice?.message?.tool_calls;
 
     return {
-      response: content,
+      response: content ?? '',
       model: completion.model,
       usage: completion.usage,
+      ...(tool_calls && tool_calls.length > 0 ? { tool_calls } : {}),
     };
   }
 }
