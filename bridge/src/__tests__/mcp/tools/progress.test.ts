@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { applyProgress, progressInputSchema } from '../../../mcp/tools/progress.js';
+import {
+  applyProgress,
+  progressInputSchema,
+  progressOpenAIToolSpec,
+} from '../../../mcp/tools/progress.js';
 import { taskManager } from '../../../mcp/tasks/manager.js';
 
 vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -61,5 +65,24 @@ describe('applyProgress', () => {
     const exactly500 = 'x'.repeat(500);
     const parsed = progressInputSchema.safeParse({ text: exactly500 });
     expect(parsed.success).toBe(true);
+  });
+});
+
+describe('progressOpenAIToolSpec', () => {
+  it('exposes finny_progress in OpenAI function-calling shape', () => {
+    expect(progressOpenAIToolSpec).toMatchObject({
+      type: 'function',
+      function: {
+        name: 'finny_progress',
+        description: expect.stringContaining('progress'),
+        parameters: {
+          type: 'object',
+          properties: {
+            text: expect.objectContaining({ type: 'string' }),
+          },
+          required: ['text'],
+        },
+      },
+    });
   });
 });

@@ -47,3 +47,33 @@ export const progressTool = {
     return { ok: false, reason: 'direct_invocation_unsupported' };
   },
 };
+
+/**
+ * OpenAI function-calling shape of finny_progress, suitable for the
+ * `tools` array in /v1/chat/completions. Used by the bridge's tool-call
+ * dispatcher (see toolDispatcher.ts). NOT exposed on the cowork-facing
+ * MCP surface.
+ */
+export const progressOpenAIToolSpec = {
+  type: 'function' as const,
+  function: {
+    name: 'finny_progress',
+    description:
+      'Emit a short stage string (≤500 chars) describing what you are currently doing. ' +
+      'Call this at phase boundaries during long execute phases (e.g. "resolving entity", ' +
+      '"querying NetSuite", "applying sign conventions"). The bridge writes the string to ' +
+      'the in-flight task record so the client cowork agent can render live progress to the user.',
+    parameters: {
+      type: 'object',
+      properties: {
+        text: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 500,
+          description: 'Stage string, ≤80 chars recommended, present tense, lowercase.',
+        },
+      },
+      required: ['text'],
+    },
+  },
+};
