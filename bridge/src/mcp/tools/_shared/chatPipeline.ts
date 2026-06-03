@@ -42,9 +42,11 @@ export interface RunQueryParams {
   scope?: Record<string, unknown>;
   clarifications_resolved?: string[];
   /**
-   * Track S: when set, finny_progress tool_calls during this run are
-   * dispatched to taskManager.updateProgress(taskId, text). When undefined
-   * (synchronous fast-path queries), progress dispatch is a no-op.
+   * Track S: identifies the in-flight task record so the tool-call
+   * dispatcher (see toolDispatcher.ts) can route finny_progress tool_calls
+   * to taskManager.updateProgress(taskId, text). Set by the background
+   * worker when draining a queued task; undefined on the synchronous
+   * fast-path where progress dispatch is a no-op.
    */
   taskId?: string;
 }
