@@ -35,7 +35,11 @@ async function drain(): Promise<void> {
     }
     taskManager.updateStatus(task.id, 'running');
     try {
-      const result = await runQuery(task.input as RunQueryParams);
+      const params: RunQueryParams = {
+        ...(task.input as RunQueryParams),
+        taskId: task.id,
+      };
+      const result = await runQuery(params);
       taskManager.updateStatus(task.id, 'completed', JSON.stringify(result));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

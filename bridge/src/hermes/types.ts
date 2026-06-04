@@ -10,6 +10,12 @@ export interface InstanceConfig {
 
 // OpenAI-compatible API types
 
+export interface OpenAIToolCall {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
+}
+
 export interface OpenAIChatCompletionResponse {
   id: string;
   object: string;
@@ -19,7 +25,8 @@ export interface OpenAIChatCompletionResponse {
     index: number;
     message: {
       role: string;
-      content: string;
+      content: string | null;
+      tool_calls?: OpenAIToolCall[];
     };
     finish_reason: string;
   }>;
@@ -40,6 +47,7 @@ export interface HermesChatResponse {
     completion_tokens: number;
     total_tokens: number;
   };
+  tool_calls?: OpenAIToolCall[];
 }
 
 export interface HermesHealthResponse {

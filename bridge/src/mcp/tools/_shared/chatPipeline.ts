@@ -18,6 +18,7 @@ import { errorEnvelope } from './envelopeBuilders.js';
 import { classifyError } from './classifyError.js';
 import { createConversation } from './conversationStore.js';
 import { log } from '../../../utils/logger.js';
+import { runChatWithTools } from './toolDispatcher.js';
 
 const BRIDGE_VERSION = '0.0.1';
 
@@ -41,6 +42,14 @@ export interface RunQueryParams {
   phase?: 'discover' | 'execute' | 'free_form';
   scope?: Record<string, unknown>;
   clarifications_resolved?: string[];
+  /**
+   * Track S: identifies the in-flight task record so the tool-call
+   * dispatcher (see toolDispatcher.ts) can route finny_progress tool_calls
+   * to taskManager.updateProgress(taskId, text). Set by the background
+   * worker when draining a queued task; undefined on the synchronous
+   * fast-path where progress dispatch is a no-op.
+   */
+  taskId?: string;
 }
 
 function getGatewayUrl(): string {
@@ -60,33 +69,42 @@ async function chat(params: {
   userMessage: string;
   sessionId: string;
   deadlineMs: number;
+  taskId: string | undefined;
 }): Promise<{ content: string; latencyMs: number }> {
   const url = getGatewayUrl();
   const token = getGatewayToken();
   const model = getModel();
   const client = new HermesClient(url, token, params.deadlineMs, model);
 
-  const combined = `${params.systemPrompt}\n\n---\n\n${params.userMessage}`;
   const started = Date.now();
   const reqShape = {
     method: 'POST',
     url: `${url}/v1/chat/completions`,
     body_shape: {
       model,
-      messages_count: 1,
+      messages_count: 2, // system + user (tool turns expand from there)
       max_tokens: 4096,
       has_session: true,
+      tools: ['finny_progress'],
     },
   };
+
   try {
-    const result = await client.chat(combined, params.sessionId);
+    const result = await runChatWithTools({
+      client,
+      systemPrompt: params.systemPrompt,
+      userMessage: params.userMessage,
+      sessionId: params.sessionId,
+      taskId: params.taskId,
+    });
     const latencyMs = Date.now() - started;
+    // NOTE: when taskId triggers finny_progress round-trips, latency_ms and response_chars aggregate across all dispatcher iterations (≤MAX_LOOPS); messages_count:2 reflects the initial request only.
     logGatewayCall(reqShape, {
       status: 200,
       latency_ms: latencyMs,
-      response_chars: result.response.length,
+      response_chars: result.content.length,
     });
-    return { content: result.response, latencyMs };
+    return { content: result.content, latencyMs };
   } catch (err) {
     const latencyMs = Date.now() - started;
     const message = err instanceof Error ? err.message : String(err);
@@ -125,6 +143,7 @@ export async function runQuery(params: RunQueryParams): Promise<FinnyEnvelope> {
       userMessage: params.question,
       sessionId,
       deadlineMs: params.deadlineMs,
+      taskId: params.taskId,
     });
     rawFirst = first.content;
   } catch (err) {
@@ -159,6 +178,7 @@ export async function runQuery(params: RunQueryParams): Promise<FinnyEnvelope> {
         userMessage: buildCorrectionPrompt(rawFirst, validation.error.issues),
         sessionId,
         deadlineMs: params.deadlineMs,
+        taskId: params.taskId,
       });
       const parsedSecond = extractEnvelopeJSON(correction.content);
       if (parsedSecond !== null) {
@@ -210,6 +230,7 @@ export async function runQuery(params: RunQueryParams): Promise<FinnyEnvelope> {
       ),
       sessionId,
       deadlineMs: params.deadlineMs,
+      taskId: params.taskId,
     });
     const parsedSecond = extractEnvelopeJSON(correction.content);
     if (parsedSecond !== null) {

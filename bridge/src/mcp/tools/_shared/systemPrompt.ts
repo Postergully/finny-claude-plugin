@@ -153,6 +153,26 @@ export function buildQuerySystemPrompt(ctx: QueryPromptContext): string {
       ? `Clarifications already resolved with the user (do NOT re-ask):\n${ctx.clarifications_resolved.map((c) => `- ${c}`).join('\n')}`
       : '';
 
+  // Track S: instruct Finny to emit progress at phase boundaries during the
+  // execute phase. The chatPipeline tool-use dispatcher routes these calls to
+  // the in-flight task record so the client agent can show live progress.
+  // Discover phase intentionally omits this — discovery is a fast brain-only
+  // step and progress emits would add noise.
+  const progressInstructions = [
+    'Progress emission (mandatory for long executes):',
+    'Call the finny_progress tool at phase boundaries during this run, with a',
+    'short stage string (≤80 chars, present tense, lowercase). Examples:',
+    '  finny_progress({text: "resolving entity and period"})',
+    '  finny_progress({text: "querying NetSuite VendBill"})',
+    '  finny_progress({text: "applying sign conventions"})',
+    '  finny_progress({text: "composing answer"})',
+    'Aim for 3-6 emits per query. Do not emit during discover phase. Do not',
+    'emit generic strings like "thinking" or "still working". The bridge',
+    'writes these to the in-flight task record so the client agent can show',
+    'live progress to the user.',
+    '',
+  ].join('\n');
+
   return [
     'You are Finny, a ShareChat NetSuite ERP agent. The caller wants you to RUN this intent.',
     '',
@@ -166,10 +186,7 @@ export function buildQuerySystemPrompt(ctx: QueryPromptContext): string {
     '',
     `Expected output shape: ${ctx.expected_shape}.`,
     '',
-    // Track S follow-up: finny_progress prompt instruction will land when the
-    // chatPipeline tool-use dispatcher exists. Until then, instructing Finny
-    // to call finny_progress would route nowhere (no interceptor). The
-    // schema/Task/builder/skill plumbing ships ready-to-light-up.
+    progressInstructions,
     ...envelopeContract(ctx.expected_shape),
   ]
     .filter(Boolean)

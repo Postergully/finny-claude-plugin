@@ -10,6 +10,7 @@
  */
 
 import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 import { taskManager } from '../tasks/manager.js';
 import { log } from '../../utils/logger.js';
 
@@ -45,5 +46,28 @@ export const progressTool = {
   handler: async (_input: ProgressInput) => {
     log('[finny_progress] direct handler hit (unexpected — should be routed)');
     return { ok: false, reason: 'direct_invocation_unsupported' };
+  },
+};
+
+/**
+ * OpenAI function-calling shape of finny_progress, suitable for the
+ * `tools` array in /v1/chat/completions. Used by the bridge's tool-call
+ * dispatcher (see toolDispatcher.ts). NOT exposed on the cowork-facing
+ * MCP surface. The `parameters` schema is derived from progressInputSchema
+ * so it stays in sync with the runtime validator.
+ */
+export const progressOpenAIToolSpec = {
+  type: 'function' as const,
+  function: {
+    name: 'finny_progress',
+    description:
+      'Emit a short stage string (≤500 chars) describing what you are currently doing. ' +
+      'Call this at phase boundaries during long execute phases (e.g. "resolving entity", ' +
+      '"querying NetSuite", "applying sign conventions"). The bridge writes the string to ' +
+      'the in-flight task record so the client cowork agent can render live progress to the user.',
+    parameters: zodToJsonSchema(progressInputSchema, {
+      target: 'jsonSchema7',
+      $refStrategy: 'none',
+    }),
   },
 };
