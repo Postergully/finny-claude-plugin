@@ -54,6 +54,7 @@ interface CodeData {
   client: OAuthClientInformationFull;
   params: AuthorizationParams;
   createdAt: number;
+  userEmail?: string;
 }
 
 interface TokenData {
@@ -62,6 +63,13 @@ interface TokenData {
   scopes: string[];
   expiresAt: number;
   resource?: URL;
+  userEmail?: string;
+}
+
+interface PendingAuth {
+  client: OAuthClientInformationFull;
+  params: AuthorizationParams;
+  createdAt: number;
 }
 
 const TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -167,8 +175,9 @@ export class HermesAuthProvider implements OAuthServerProvider {
   private tokens = new Map<string, TokenData>();
   private refreshTokens = new Map<
     string,
-    { clientId: string; scopes: string[]; expiresAt: number; resource?: URL }
+    { clientId: string; scopes: string[]; expiresAt: number; resource?: URL; userEmail?: string }
   >();
+  private pendingAuths = new Map<string, PendingAuth>();
   private reaperInterval: ReturnType<typeof setInterval> | undefined;
 
   constructor(config: AuthProviderConfig) {
@@ -203,28 +212,94 @@ export class HermesAuthProvider implements OAuthServerProvider {
         this.refreshTokens.delete(token);
       }
     }
+
+    for (const [id, data] of this.pendingAuths) {
+      if (now - data.createdAt > AUTH_CODE_TTL_MS) {
+        this.pendingAuths.delete(id);
+      }
+    }
   }
 
   /**
-   * Auto-approve: generate auth code and redirect immediately.
+   * When AUTH_REQUIRE_LOGIN=true, redirect to Google OAuth.
+   * Otherwise, auto-approve (original behavior).
    */
   async authorize(
     client: OAuthClientInformationFull,
     params: AuthorizationParams,
     res: Response
   ): Promise<void> {
-    const code = randomUUID();
+    const requireLogin = process.env.AUTH_REQUIRE_LOGIN === 'true';
 
-    this.codes.set(code, { client, params, createdAt: Date.now() });
+    if (!requireLogin) {
+      // --- Old auto-approve flow ---
+      const code = randomUUID();
+      this.codes.set(code, { client, params, createdAt: Date.now() });
 
-    const searchParams = new URLSearchParams({ code });
-    if (params.state !== undefined) {
-      searchParams.set('state', params.state);
+      const searchParams = new URLSearchParams({ code });
+      if (params.state !== undefined) {
+        searchParams.set('state', params.state);
+      }
+
+      const targetUrl = new URL(params.redirectUri);
+      targetUrl.search = searchParams.toString();
+      res.redirect(targetUrl.toString());
+      return;
     }
 
-    const targetUrl = new URL(params.redirectUri);
+    // --- Google OAuth login flow ---
+    const pendingId = randomUUID();
+    this.pendingAuths.set(pendingId, { client, params, createdAt: Date.now() });
+
+    const googleClientId = process.env.GOOGLE_CLIENT_ID;
+    if (!googleClientId) {
+      throw new InvalidRequestError('AUTH_REQUIRE_LOGIN is true but GOOGLE_CLIENT_ID is not set');
+    }
+
+    const issuerUrl = process.env.MCP_ISSUER_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const redirectUri = `${issuerUrl}/auth/google/callback`;
+
+    const googleAuthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    googleAuthUrl.searchParams.set('client_id', googleClientId);
+    googleAuthUrl.searchParams.set('redirect_uri', redirectUri);
+    googleAuthUrl.searchParams.set('response_type', 'code');
+    googleAuthUrl.searchParams.set('scope', 'openid email profile');
+    googleAuthUrl.searchParams.set('state', pendingId);
+    googleAuthUrl.searchParams.set('prompt', 'select_account');
+
+    res.redirect(googleAuthUrl.toString());
+  }
+
+  /**
+   * Complete the authorization after Google login succeeds.
+   * Generates the MCP auth code with the user's email attached.
+   * Returns the redirect URL to send the browser to (claude.ai callback).
+   */
+  completeAuthorization(pendingId: string, userEmail: string): string {
+    const pending = this.pendingAuths.get(pendingId);
+    if (!pending || Date.now() - pending.createdAt > AUTH_CODE_TTL_MS) {
+      if (pending) this.pendingAuths.delete(pendingId);
+      throw new InvalidRequestError('Invalid or expired pending authorization');
+    }
+
+    this.pendingAuths.delete(pendingId);
+
+    const code = randomUUID();
+    this.codes.set(code, {
+      client: pending.client,
+      params: pending.params,
+      createdAt: Date.now(),
+      userEmail,
+    });
+
+    const searchParams = new URLSearchParams({ code });
+    if (pending.params.state !== undefined) {
+      searchParams.set('state', pending.params.state);
+    }
+
+    const targetUrl = new URL(pending.params.redirectUri);
     targetUrl.search = searchParams.toString();
-    res.redirect(targetUrl.toString());
+    return targetUrl.toString();
   }
 
   async challengeForAuthorizationCode(
@@ -268,6 +343,7 @@ export class HermesAuthProvider implements OAuthServerProvider {
       scopes,
       expiresAt: Date.now() + TOKEN_TTL_MS,
       resource: resource || codeData.params.resource,
+      userEmail: codeData.userEmail,
     });
 
     this.refreshTokens.set(refreshToken, {
@@ -275,6 +351,7 @@ export class HermesAuthProvider implements OAuthServerProvider {
       scopes,
       expiresAt: Date.now() + REFRESH_TOKEN_TTL_MS,
       resource: resource || codeData.params.resource,
+      userEmail: codeData.userEmail,
     });
 
     return {
@@ -315,6 +392,7 @@ export class HermesAuthProvider implements OAuthServerProvider {
       scopes: tokenScopes,
       expiresAt: Date.now() + TOKEN_TTL_MS,
       resource: resource || data.resource,
+      userEmail: data.userEmail,
     });
 
     this.refreshTokens.set(newRefreshToken, {
@@ -322,6 +400,7 @@ export class HermesAuthProvider implements OAuthServerProvider {
       scopes: tokenScopes,
       expiresAt: Date.now() + REFRESH_TOKEN_TTL_MS,
       resource: resource || data.resource,
+      userEmail: data.userEmail,
     });
 
     return {
@@ -345,7 +424,9 @@ export class HermesAuthProvider implements OAuthServerProvider {
       scopes: tokenData.scopes,
       expiresAt: Math.floor(tokenData.expiresAt / 1000),
       resource: tokenData.resource,
-    };
+      // @ts-expect-error — extending AuthInfo with subject for access log consumption
+      subject: tokenData.userEmail,
+    } as AuthInfo;
   }
 
   async revokeToken(
