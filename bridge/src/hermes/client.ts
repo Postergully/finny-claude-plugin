@@ -30,7 +30,9 @@ export interface ChatWithToolsParams {
   sessionId?: string;
 }
 
-const DEFAULT_TIMEOUT_MS = 120_000;
+// Workstream A (2026-06-08): raised 120s → 150s. GL queries regularly
+// take 90–120s end-to-end; the prior ceiling caused spurious retries.
+const DEFAULT_TIMEOUT_MS = 150_000;
 const MAX_RESPONSE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 const MAX_DEBUG_BODY_LENGTH = 4096;
 
