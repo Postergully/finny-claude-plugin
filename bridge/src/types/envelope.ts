@@ -9,7 +9,7 @@ const SourceSchema = z
   .object({
     kind: z.enum(['suiteql', 'rest', 'memory', 'skill']),
     ref: z.string(),
-    rows_scanned: z.number().int().nonnegative().optional(),
+    rows_scanned: z.number().int().nonnegative().nullable().optional(),
   })
   .passthrough();
 
@@ -73,7 +73,9 @@ const ErrorCodeSchema = z.enum([
 const ErrorSchema = z.object({
   code: ErrorCodeSchema,
   message: z.string(),
-  retryable: z.boolean(),
+  // Optional defensively (Workstream A 2026-06-08): Finny may emit error
+  // blocks without retryable; judging-output treats absence as `false`.
+  retryable: z.boolean().optional(),
 });
 
 const StatusSchema = z.enum(['ok', 'partial', 'refused', 'error', 'running', 'needs_input']);
