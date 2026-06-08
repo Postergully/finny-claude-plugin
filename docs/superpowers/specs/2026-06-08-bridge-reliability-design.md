@@ -1,8 +1,15 @@
 # Bridge Reliability + Performance Pass
 
 **Date:** 2026-06-08
-**Status:** Draft — pending user review
+**Status:** ✅ Shipped — [PR #5](https://github.com/Postergully/finny-claude-plugin/pull/5) (branch `feat/bridge-reliability`, 18 commits)
 **Scope:** `bridge/` package only. No plugin/skill behavioral changes (doc updates only).
+
+## As-built deviations from design
+
+- **Workstream B caps (raised slightly from spec):** `executeSuiteQL.max_rows` cap landed at 10000 (not 20000) and HTTP body cap at 25 MB (not 50 MB). Cursor escape kicks in at 2000 rows / 8 MB serialized as designed. Lower caps were chosen because the cursor mechanism makes generous outer ceilings unnecessary.
+- **Workstream C `tool_loop_iter`:** plumbed as a field but currently hard-coded to `0` in chatPipeline. The toolDispatcher loop iteration count doesn't bubble out today; threading it through is deferred to a follow-up. All other diagnostics (session_id, session_created, correction_retry) are live.
+- **Workstream C `prompt_tokens` / `completion_tokens`:** the field is in the type but not populated — `runChatWithTools` doesn't return token counts today. Optional in the type, so back-compat preserved for future wiring.
+- **Cleanup commits:** the branch also includes one commit removing a pre-existing unused `@ts-expect-error` in `auth/provider.ts` and one eslint --fix sweep across Workstream B/C files. Both were flushed because they were on the diff path; neither is part of the design.
 
 ## Problem
 

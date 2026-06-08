@@ -1,5 +1,39 @@
 # Bridge Reliability + Performance Pass — Implementation Plan
 
+> **Status:** ✅ Shipped — [PR #5](https://github.com/Postergully/finny-claude-plugin/pull/5) on branch `feat/bridge-reliability` (18 commits). Executed via superpowers:subagent-driven-development with two-stage review on Tasks 1 and 7.
+
+## Execution summary
+
+| Task | Status | Commit |
+|---|---|---|
+| 1. Schema relaxations (rows_scanned + retryable) | ✅ | `6a4bcfc` |
+| 2. Document OUT_OF_SCOPE decision | ✅ | `9870dd2` |
+| 3. HTTP timeout 120s → 150s | ✅ | `9936d13` |
+| 4. deadline_ms 10s → 30s for query/report | ✅ | `c504c4d` |
+| 5. Tighten polling backoff (6-poll schedule) | ✅ | `7348b74` |
+| 6. Extend gatewayLog with diagnostics | ✅ | `ca11801` |
+| 7. Wire diagnostics into chatPipeline + client | ✅ | `9fd291e` |
+| 8. Session-creation counter | ✅ | `ff9b9d7` |
+| 9. analyze-gateway-log.mjs summarizer | ✅ | `f0ce0e7` |
+| 10. bridge-watch.mjs live TUI | ✅ | `8dfe6ae` |
+| 11. Add next_cursor to envelope DataRows | ✅ | `236067d` |
+| 12. Cursor store | ✅ | `104b67f` |
+| 13. Bump payload ceilings | ✅ | `bbf7b3f` |
+| 14. Cursor escape in chatPipeline | ✅ | `7a4036a` |
+| 15. finny_continue cursor branch | ✅ | `bd27f0d` |
+| 16. judging-output skill cursor section | ✅ | `222fd17` |
+| 17. Final check + manual smoke + PR | ✅ | (PR #5) |
+| (cleanup) Remove unused @ts-expect-error | ✅ | `b9a2dbb` |
+| (cleanup) eslint --fix on Workstream B/C files | ✅ | `fc082b1` |
+
+**Final state:** 458 tests pass (12 expected skips), `npm run check:all` clean (lint:fix, typecheck, test:run, build).
+
+**Deviations from plan:** Workstream B ceilings landed lower than the design's outer caps (max_rows cap 10000 vs 20000; body cap 25 MB vs 50 MB) because the cursor escape mechanism makes generous outer ceilings unnecessary. `tool_loop_iter` and token-count diagnostics fields are plumbed in the type but not populated yet — deferred to a follow-up. See the design doc's "As-built deviations" section for details.
+
+**Manual smoke tests still pending** (run against staging): long GL query inline within 30s; 5000-row SuiteQL drain via cursor; bridge-watch session reuse verification.
+
+---
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement the spec at `docs/superpowers/specs/2026-06-08-bridge-reliability-design.md`: schema relaxations, timeout raises, hybrid payload pass-through with cursor escape, and gateway instrumentation + watch CLI.
