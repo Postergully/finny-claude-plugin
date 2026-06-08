@@ -14,6 +14,20 @@ type Entry = {
 
 const store = new Map<string, Entry>();
 
+// Workstream C (2026-06-08): observability counter so the bridge can
+// assert sessions are reused across correction retries (the suspected
+// "spawn new session per rejection" symptom should manifest as this
+// counter incrementing per query). Read by chatPipeline + bridge-watch.
+let sessionCreationCount = 0;
+
+export function getSessionCreationCount(): number {
+  return sessionCreationCount;
+}
+
+export function __sessionCreationCount_FOR_TEST_ONLY(): number {
+  return sessionCreationCount;
+}
+
 function prune(now: number): void {
   // Evict expired entries first.
   for (const [key, entry] of store) {
@@ -49,6 +63,7 @@ export function getOrCreateSession(principal: string): string {
   if (existing) {
     store.delete(principal);
   }
+  sessionCreationCount += 1;
   const sessionId = `finny-${randomUUID()}`;
   store.set(principal, { sessionId, lastUsed: now });
   prune(now);
@@ -57,4 +72,5 @@ export function getOrCreateSession(principal: string): string {
 
 export function __resetSessionStore_FOR_TEST_ONLY(): void {
   store.clear();
+  sessionCreationCount = 0;
 }

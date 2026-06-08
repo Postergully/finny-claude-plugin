@@ -18,7 +18,7 @@ import {
   type GatewayDiagnostics,
   type GatewayQueryAggregate,
 } from './gatewayLog.js';
-import { getOrCreateSession } from './sessionStore.js';
+import { getOrCreateSession, getSessionCreationCount } from './sessionStore.js';
 import { errorEnvelope } from './envelopeBuilders.js';
 import { classifyError } from './classifyError.js';
 import { createConversation } from './conversationStore.js';
@@ -135,7 +135,9 @@ async function chat(params: {
 export async function runQuery(params: RunQueryParams): Promise<FinnyEnvelope> {
   const envUsed: 'sandbox' | 'production' = params.entity_hints?.env ?? 'production';
   const started = Date.now();
+  const beforeSessionCount = getSessionCreationCount();
   const sessionId = getOrCreateSession(params.sessionPrincipal);
+  const sessionWasJustCreated = getSessionCreationCount() > beforeSessionCount;
 
   const phases: GatewayQueryAggregate['phases'] = {
     initial: { calls: 0, latency_ms: 0 },
@@ -159,6 +161,7 @@ export async function runQuery(params: RunQueryParams): Promise<FinnyEnvelope> {
         taskId: params.taskId,
         diagnostics: {
           session_id: sessionId,
+          session_created: phase === 'initial' ? sessionWasJustCreated : false,
           correction_retry: isCorrection,
           tool_loop_iter: 0,
         },
