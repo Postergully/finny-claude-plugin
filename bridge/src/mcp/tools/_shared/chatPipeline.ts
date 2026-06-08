@@ -318,12 +318,9 @@ export async function runQuery(params: RunQueryParams): Promise<FinnyEnvelope> {
   } finally {
     logGatewayQueryAggregate({
       session_id: sessionId,
-      total_calls:
-        phases.initial.calls + phases.correction.calls + phases.progress_loop.calls,
+      total_calls: phases.initial.calls + phases.correction.calls + phases.progress_loop.calls,
       total_latency_ms:
-        phases.initial.latency_ms +
-        phases.correction.latency_ms +
-        phases.progress_loop.latency_ms,
+        phases.initial.latency_ms + phases.correction.latency_ms + phases.progress_loop.latency_ms,
       phases,
     });
   }
@@ -369,10 +366,7 @@ const CURSOR_BYTE_CEILING = 8 * 1024 * 1024; // 8 MB
 // Workstream B (2026-06-08): if a rows envelope exceeds the row or byte
 // ceiling, store the remainder under a cursor and emit next_cursor on
 // the envelope. Cowork resumes via finny_continue({cursor}).
-export function applyCursorEscape(
-  env: FinnyEnvelope,
-  sessionPrincipal: string
-): FinnyEnvelope {
+export function applyCursorEscape(env: FinnyEnvelope, sessionPrincipal: string): FinnyEnvelope {
   if (!env.data || env.data.shape !== 'rows') return env;
   const rows = env.data.rows;
   const serializedSize = JSON.stringify(rows).length;
@@ -381,10 +375,7 @@ export function applyCursorEscape(
   if (!overRows && !overBytes) return env;
 
   let pageSize = Math.min(rows.length, CURSOR_ROW_CEILING);
-  while (
-    pageSize > 1 &&
-    JSON.stringify(rows.slice(0, pageSize)).length > CURSOR_BYTE_CEILING
-  ) {
+  while (pageSize > 1 && JSON.stringify(rows.slice(0, pageSize)).length > CURSOR_BYTE_CEILING) {
     pageSize = Math.floor(pageSize / 2);
   }
 

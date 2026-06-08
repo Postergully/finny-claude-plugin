@@ -36,14 +36,12 @@ export const continueInputSchema = z
       .optional(),
     deadline_ms: z.number().int().positive().max(300_000).default(30_000),
   })
-  .refine(
-    (i) => (i.cursor !== undefined) !== (i.conversation_id !== undefined),
-    { message: 'finny_continue requires exactly one of: cursor OR conversation_id' }
-  )
-  .refine(
-    (i) => i.cursor !== undefined || i.response !== undefined,
-    { message: 'conversation_id branch requires response' }
-  );
+  .refine((i) => (i.cursor !== undefined) !== (i.conversation_id !== undefined), {
+    message: 'finny_continue requires exactly one of: cursor OR conversation_id',
+  })
+  .refine((i) => i.cursor !== undefined || i.response !== undefined, {
+    message: 'conversation_id branch requires response',
+  });
 
 export type ContinueInput = z.infer<typeof continueInputSchema>;
 

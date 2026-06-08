@@ -53,10 +53,7 @@ describe('gatewayLog extended fields (Workstream C)', () => {
   });
 
   it('still works when diagnostics arg is omitted (back-compat)', () => {
-    logGatewayCall(
-      { method: 'POST', url: '/x' },
-      { status: 200, latency_ms: 1 }
-    );
+    logGatewayCall({ method: 'POST', url: '/x' }, { status: 200, latency_ms: 1 });
     expect(captured.length).toBe(1);
     const record = JSON.parse(captured[0]);
     expect(record.diagnostics).toBeUndefined();

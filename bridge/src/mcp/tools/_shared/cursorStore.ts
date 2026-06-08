@@ -40,9 +40,7 @@ function prune(now: number): void {
   }
 }
 
-export function storeCursor(
-  init: Omit<CursorEntry, 'cursor' | 'createdAt'>
-): string {
+export function storeCursor(init: Omit<CursorEntry, 'cursor' | 'createdAt'>): string {
   const now = Date.now();
   const cursor = `cur-${randomUUID()}`;
   store.set(cursor, { ...init, cursor, createdAt: now });
