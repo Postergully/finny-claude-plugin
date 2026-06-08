@@ -255,3 +255,46 @@ describe('envelope schema relaxations (Workstream A)', () => {
     expect(result.success).toBe(true);
   });
 });
+
+describe('next_cursor in DataRows (Workstream B)', () => {
+  const rowsBase = {
+    status: 'ok' as const,
+    intent_restated: 'test',
+    assumptions: [],
+    unanswered: [],
+    sources: [],
+    confidence: 'high' as const,
+    confidence_reason: 'test',
+    elapsed_ms: 0,
+    env_used: 'production' as const,
+    bridge_version: '0.0.1',
+    finny_session_id: 'finny-test',
+  };
+
+  it('accepts next_cursor on a rows envelope', () => {
+    const env = {
+      ...rowsBase,
+      data: {
+        shape: 'rows' as const,
+        columns: ['a'],
+        rows: [[1], [2]],
+        next_cursor: 'cursor-abc',
+      },
+    };
+    const result = FinnyEnvelopeSchema.safeParse(env);
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts rows envelope without next_cursor', () => {
+    const env = {
+      ...rowsBase,
+      data: {
+        shape: 'rows' as const,
+        columns: ['a'],
+        rows: [[1]],
+      },
+    };
+    const result = FinnyEnvelopeSchema.safeParse(env);
+    expect(result.success).toBe(true);
+  });
+});
