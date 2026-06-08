@@ -35,6 +35,11 @@ export const continueInputSchema = z
       })
       .optional(),
     deadline_ms: z.number().int().positive().max(300_000).default(30_000),
+    // Security: caller principal scoping (matches query.ts/report.ts shape).
+    // Used to enforce ownership on the cursor branch — a leaked cursor token
+    // can't be drained by a different principal. The conversation branch
+    // already has its sessionPrincipal pinned in conversationStore.
+    sessionId: z.string().optional(),
   })
   .refine((i) => (i.cursor !== undefined) !== (i.conversation_id !== undefined), {
     message: 'finny_continue requires exactly one of: cursor OR conversation_id',
@@ -47,9 +52,14 @@ export type ContinueInput = z.infer<typeof continueInputSchema>;
 
 const CURSOR_PAGE_SIZE = 2000;
 
-async function handleCursorContinue(cursor: string): Promise<FinnyEnvelope> {
-  const entry = takeCursor(cursor);
+async function handleCursorContinue(
+  cursor: string,
+  callerPrincipal: string
+): Promise<FinnyEnvelope> {
+  const entry = takeCursor(cursor, callerPrincipal);
   if (!entry) {
+    // Indistinguishable response for "unknown", "expired", and
+    // "wrong principal" — see takeCursor for the security reasoning.
     return errorEnvelope({
       code: 'other',
       message: `Unknown or expired cursor: ${cursor}. Cursors expire 10 minutes after creation; restart from finny_query.`,
@@ -95,10 +105,13 @@ async function handleCursorContinue(cursor: string): Promise<FinnyEnvelope> {
 
 async function handler(rawInput: ContinueInput): Promise<FinnyEnvelope> {
   const input = continueInputSchema.parse(rawInput);
+  // Caller principal — matches query.ts/report.ts: explicit sessionId wins,
+  // otherwise the production default. Used to scope cursor drain access.
+  const callerPrincipal = input.sessionId ?? 'm2-default:production';
 
   // Cursor branch: drain a paginated rows result.
   if (input.cursor !== undefined) {
-    return handleCursorContinue(input.cursor);
+    return handleCursorContinue(input.cursor, callerPrincipal);
   }
 
   // Conversation branch: the schema refinement guarantees conversation_id
