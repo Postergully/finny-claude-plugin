@@ -12,7 +12,12 @@ import { DEFAULT_FINNY_UPSTREAM_URL, DEFAULT_MODEL } from '../../../config/const
 import type { BlessListEntry } from '../../../intents/types.js';
 import { buildQuerySystemPrompt } from './systemPrompt.js';
 import { extractEnvelopeJSON, buildCorrectionPrompt } from './parseEnvelope.js';
-import { logGatewayCall } from './gatewayLog.js';
+import {
+  logGatewayCall,
+  logGatewayQueryAggregate,
+  type GatewayDiagnostics,
+  type GatewayQueryAggregate,
+} from './gatewayLog.js';
 import { getOrCreateSession } from './sessionStore.js';
 import { errorEnvelope } from './envelopeBuilders.js';
 import { classifyError } from './classifyError.js';
@@ -70,6 +75,7 @@ async function chat(params: {
   sessionId: string;
   deadlineMs: number;
   taskId: string | undefined;
+  diagnostics: GatewayDiagnostics;
 }): Promise<{ content: string; latencyMs: number }> {
   const url = getGatewayUrl();
   const token = getGatewayToken();
@@ -99,21 +105,29 @@ async function chat(params: {
     });
     const latencyMs = Date.now() - started;
     // NOTE: when taskId triggers finny_progress round-trips, latency_ms and response_chars aggregate across all dispatcher iterations (≤MAX_LOOPS); messages_count:2 reflects the initial request only.
-    logGatewayCall(reqShape, {
-      status: 200,
-      latency_ms: latencyMs,
-      response_chars: result.content.length,
-    });
+    logGatewayCall(
+      reqShape,
+      {
+        status: 200,
+        latency_ms: latencyMs,
+        response_chars: result.content.length,
+      },
+      params.diagnostics
+    );
     return { content: result.content, latencyMs };
   } catch (err) {
     const latencyMs = Date.now() - started;
     const message = err instanceof Error ? err.message : String(err);
     const maybeStatus = (err as { status?: number } | undefined)?.status ?? 0;
-    logGatewayCall(reqShape, {
-      status: maybeStatus,
-      latency_ms: latencyMs,
-      error: message.slice(0, 512),
-    });
+    logGatewayCall(
+      reqShape,
+      {
+        status: maybeStatus,
+        latency_ms: latencyMs,
+        error: message.slice(0, 512),
+      },
+      params.diagnostics
+    );
     throw err;
   }
 }
@@ -123,76 +137,154 @@ export async function runQuery(params: RunQueryParams): Promise<FinnyEnvelope> {
   const started = Date.now();
   const sessionId = getOrCreateSession(params.sessionPrincipal);
 
-  const phase: 'discover' | 'execute' | 'free_form' =
-    params.phase ?? (params.intent_string ? 'execute' : 'free_form');
+  const phases: GatewayQueryAggregate['phases'] = {
+    initial: { calls: 0, latency_ms: 0 },
+    correction: { calls: 0, latency_ms: 0 },
+    progress_loop: { calls: 0, latency_ms: 0 },
+  };
 
-  const systemPrompt = buildQuerySystemPrompt({
-    expected_shape: params.expected_shape ?? 'narrative',
-    phase,
-    intent_string: params.intent_string,
-    blessed: params.blessed,
-    scope: params.scope,
-    clarifications_resolved: params.clarifications_resolved,
-    user_question: params.question,
-  });
-
-  let rawFirst: string;
-  try {
-    const first = await chat({
-      systemPrompt,
-      userMessage: params.question,
-      sessionId,
-      deadlineMs: params.deadlineMs,
-      taskId: params.taskId,
-    });
-    rawFirst = first.content;
-  } catch (err) {
-    const { code, retryable } = classifyError(err);
-    return errorEnvelope({
-      code,
-      message: err instanceof Error ? err.message : String(err),
-      retryable,
-      elapsedMs: Date.now() - started,
-      envUsed,
-      sessionId,
-    });
-  }
-
-  // First-pass parse
-  const parsedFirst = extractEnvelopeJSON(rawFirst);
-  if (parsedFirst !== null) {
-    const validation = FinnyEnvelopeSchema.safeParse({
-      ...(parsedFirst as object),
-      elapsed_ms: Date.now() - started,
-      env_used: envUsed,
-      bridge_version: BRIDGE_VERSION,
-      finny_session_id: sessionId,
-    });
-    if (validation.success) {
-      return finalizeEnvelope(validation.data, params);
-    }
-    // Fall through to correction retry
+  const callChat = async (
+    phase: 'initial' | 'correction',
+    args: { systemPrompt: string; userMessage: string }
+  ) => {
+    const isCorrection = phase === 'correction';
+    const started = Date.now();
+    phases[phase].calls += 1;
     try {
-      const correction = await chat({
-        systemPrompt,
-        userMessage: buildCorrectionPrompt(rawFirst, validation.error.issues),
+      const result = await chat({
+        systemPrompt: args.systemPrompt,
+        userMessage: args.userMessage,
         sessionId,
         deadlineMs: params.deadlineMs,
         taskId: params.taskId,
+        diagnostics: {
+          session_id: sessionId,
+          correction_retry: isCorrection,
+          tool_loop_iter: 0,
+        },
+      });
+      phases[phase].latency_ms += result.latencyMs;
+      return result;
+    } catch (err) {
+      phases[phase].latency_ms += Date.now() - started;
+      throw err;
+    }
+  };
+
+  try {
+    const phase: 'discover' | 'execute' | 'free_form' =
+      params.phase ?? (params.intent_string ? 'execute' : 'free_form');
+
+    const systemPrompt = buildQuerySystemPrompt({
+      expected_shape: params.expected_shape ?? 'narrative',
+      phase,
+      intent_string: params.intent_string,
+      blessed: params.blessed,
+      scope: params.scope,
+      clarifications_resolved: params.clarifications_resolved,
+      user_question: params.question,
+    });
+
+    let rawFirst: string;
+    try {
+      const first = await callChat('initial', {
+        systemPrompt,
+        userMessage: params.question,
+      });
+      rawFirst = first.content;
+    } catch (err) {
+      const { code, retryable } = classifyError(err);
+      return errorEnvelope({
+        code,
+        message: err instanceof Error ? err.message : String(err),
+        retryable,
+        elapsedMs: Date.now() - started,
+        envUsed,
+        sessionId,
+      });
+    }
+
+    // First-pass parse
+    const parsedFirst = extractEnvelopeJSON(rawFirst);
+    if (parsedFirst !== null) {
+      const validation = FinnyEnvelopeSchema.safeParse({
+        ...(parsedFirst as object),
+        elapsed_ms: Date.now() - started,
+        env_used: envUsed,
+        bridge_version: BRIDGE_VERSION,
+        finny_session_id: sessionId,
+      });
+      if (validation.success) {
+        return finalizeEnvelope(validation.data, params);
+      }
+      // Fall through to correction retry
+      try {
+        const correction = await callChat('correction', {
+          systemPrompt,
+          userMessage: buildCorrectionPrompt(rawFirst, validation.error.issues),
+        });
+        const parsedSecond = extractEnvelopeJSON(correction.content);
+        if (parsedSecond !== null) {
+          const validation2 = FinnyEnvelopeSchema.safeParse({
+            ...(parsedSecond as object),
+            elapsed_ms: Date.now() - started,
+            env_used: envUsed,
+            bridge_version: BRIDGE_VERSION,
+            finny_session_id: sessionId,
+          });
+          if (validation2.success) return finalizeEnvelope(validation2.data, params);
+          return errorEnvelope({
+            code: 'envelope_parse_failed',
+            message: `Correction retry still invalid: ${validation2.error.issues[0]?.message ?? 'unknown'}`,
+            retryable: false,
+            elapsedMs: Date.now() - started,
+            envUsed,
+            sessionId,
+          });
+        }
+      } catch (err) {
+        const { code, retryable } = classifyError(err);
+        return errorEnvelope({
+          code,
+          message: err instanceof Error ? err.message : String(err),
+          retryable,
+          elapsedMs: Date.now() - started,
+          envUsed,
+          sessionId,
+        });
+      }
+      return errorEnvelope({
+        code: 'envelope_parse_failed',
+        message: 'Correction retry did not contain extractable JSON',
+        retryable: false,
+        elapsedMs: Date.now() - started,
+        envUsed,
+        sessionId,
+      });
+    }
+
+    // First pass failed to extract JSON at all — try correction once.
+    try {
+      const correction = await callChat('correction', {
+        systemPrompt,
+        userMessage: buildCorrectionPrompt(
+          rawFirst,
+          'Response did not contain a valid JSON envelope.'
+        ),
       });
       const parsedSecond = extractEnvelopeJSON(correction.content);
       if (parsedSecond !== null) {
-        const validation2 = FinnyEnvelopeSchema.safeParse({
+        const validation = FinnyEnvelopeSchema.safeParse({
           ...(parsedSecond as object),
           elapsed_ms: Date.now() - started,
           env_used: envUsed,
           bridge_version: BRIDGE_VERSION,
           finny_session_id: sessionId,
         });
-        if (validation2.success) return finalizeEnvelope(validation2.data, params);
+        if (validation.success) return finalizeEnvelope(validation.data, params);
         return errorEnvelope({
           code: 'envelope_parse_failed',
-          message: `Correction retry still invalid: ${validation2.error.issues[0]?.message ?? 'unknown'}`,
+          message: `Correction retry still invalid: ${validation.error.issues[0]?.message ?? 'unknown'}`,
           retryable: false,
           elapsedMs: Date.now() - started,
           envUsed,
@@ -210,67 +302,27 @@ export async function runQuery(params: RunQueryParams): Promise<FinnyEnvelope> {
         sessionId,
       });
     }
+
     return errorEnvelope({
       code: 'envelope_parse_failed',
-      message: 'Correction retry did not contain extractable JSON',
+      message: 'Neither initial response nor correction retry produced a valid envelope',
       retryable: false,
       elapsedMs: Date.now() - started,
       envUsed,
       sessionId,
     });
-  }
-
-  // First pass failed to extract JSON at all — try correction once.
-  try {
-    const correction = await chat({
-      systemPrompt,
-      userMessage: buildCorrectionPrompt(
-        rawFirst,
-        'Response did not contain a valid JSON envelope.'
-      ),
-      sessionId,
-      deadlineMs: params.deadlineMs,
-      taskId: params.taskId,
-    });
-    const parsedSecond = extractEnvelopeJSON(correction.content);
-    if (parsedSecond !== null) {
-      const validation = FinnyEnvelopeSchema.safeParse({
-        ...(parsedSecond as object),
-        elapsed_ms: Date.now() - started,
-        env_used: envUsed,
-        bridge_version: BRIDGE_VERSION,
-        finny_session_id: sessionId,
-      });
-      if (validation.success) return finalizeEnvelope(validation.data, params);
-      return errorEnvelope({
-        code: 'envelope_parse_failed',
-        message: `Correction retry still invalid: ${validation.error.issues[0]?.message ?? 'unknown'}`,
-        retryable: false,
-        elapsedMs: Date.now() - started,
-        envUsed,
-        sessionId,
-      });
-    }
-  } catch (err) {
-    const { code, retryable } = classifyError(err);
-    return errorEnvelope({
-      code,
-      message: err instanceof Error ? err.message : String(err),
-      retryable,
-      elapsedMs: Date.now() - started,
-      envUsed,
-      sessionId,
+  } finally {
+    logGatewayQueryAggregate({
+      session_id: sessionId,
+      total_calls:
+        phases.initial.calls + phases.correction.calls + phases.progress_loop.calls,
+      total_latency_ms:
+        phases.initial.latency_ms +
+        phases.correction.latency_ms +
+        phases.progress_loop.latency_ms,
+      phases,
     });
   }
-
-  return errorEnvelope({
-    code: 'envelope_parse_failed',
-    message: 'Neither initial response nor correction retry produced a valid envelope',
-    retryable: false,
-    elapsedMs: Date.now() - started,
-    envUsed,
-    sessionId,
-  });
 }
 
 // When Finny returns status: 'needs_input', the bridge owns the

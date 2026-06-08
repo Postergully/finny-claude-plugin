@@ -25,8 +25,11 @@ vi.mock('../../../../hermes/client.js', () => ({
 }));
 
 // Silence the access log during tests.
+const logGatewayCallMock = vi.fn();
+const logGatewayQueryAggregateMock = vi.fn();
 vi.mock('../../../../mcp/tools/_shared/gatewayLog.js', () => ({
-  logGatewayCall: vi.fn(),
+  logGatewayCall: logGatewayCallMock,
+  logGatewayQueryAggregate: logGatewayQueryAggregateMock,
 }));
 
 const { runQuery } = await import('../../../../mcp/tools/_shared/chatPipeline.js');
@@ -59,6 +62,8 @@ function extractPrompt(callArgs: unknown[]): string {
 describe('chatPipeline.runQuery — schema-aware correction retry (Track D)', () => {
   beforeEach(() => {
     chatMock.mockReset();
+    logGatewayCallMock.mockClear();
+    logGatewayQueryAggregateMock.mockClear();
   });
 
   it('first response missing required fields → correction prompt names every missing path → second response succeeds', async () => {
@@ -156,7 +161,11 @@ describe('chatPipeline.runQuery — schema-aware correction retry (Track D)', ()
 });
 
 describe('chatPipeline.runQuery — two-phase system prompt content (Track E)', () => {
-  beforeEach(() => chatMock.mockReset());
+  beforeEach(() => {
+    chatMock.mockReset();
+    logGatewayCallMock.mockClear();
+    logGatewayQueryAggregateMock.mockClear();
+  });
 
   function okNarrativeFenced(): string {
     return fenced({
@@ -362,7 +371,11 @@ describe('chatPipeline.runQuery — two-phase system prompt content (Track E)', 
 });
 
 describe('chatPipeline.runQuery — discover violation surfacing (Track G)', () => {
-  beforeEach(() => chatMock.mockReset());
+  beforeEach(() => {
+    chatMock.mockReset();
+    logGatewayCallMock.mockClear();
+    logGatewayQueryAggregateMock.mockClear();
+  });
 
   it('discover envelope with kind:suiteql sources annotates confidence_reason', async () => {
     // Simulate Finny violating the prompt: she returns a discover narrative
@@ -507,7 +520,11 @@ describe('chatPipeline.runQuery — discover violation surfacing (Track G)', () 
 });
 
 describe('chatPipeline.runQuery — tool dispatcher contract (Track S)', () => {
-  beforeEach(() => chatMock.mockReset());
+  beforeEach(() => {
+    chatMock.mockReset();
+    logGatewayCallMock.mockClear();
+    logGatewayQueryAggregateMock.mockClear();
+  });
 
   it('runQuery with taskId calls HermesClient.chat with {messages, tools:[finny_progress], sessionId} and routes finny_progress tool_calls to taskManager', async () => {
     // Pre-create a running task so updateProgress will accept writes.
@@ -598,5 +615,140 @@ describe('chatPipeline.runQuery — tool dispatcher contract (Track S)', () => {
     expect(chatMock).toHaveBeenCalledTimes(2);
 
     taskManager.delete(task.id);
+  });
+});
+
+describe('chatPipeline.runQuery — gateway diagnostics and aggregate (Workstream C)', () => {
+  beforeEach(() => {
+    chatMock.mockReset();
+    logGatewayCallMock.mockClear();
+    logGatewayQueryAggregateMock.mockClear();
+  });
+
+  it('emits exactly one gateway_query_aggregate per runQuery call with correct phase counts', async () => {
+    // First call: success path (initial only)
+    chatMock.mockResolvedValueOnce({
+      response: fenced({
+        status: 'ok',
+        intent_restated: 'mocked',
+        assumptions: [],
+        unanswered: [],
+        data: { shape: 'scalar', value: 1 },
+        sources: [],
+        confidence: 'high',
+        confidence_reason: 'mock',
+        env_used: 'production',
+      }),
+      model: 'mock',
+    });
+
+    await runQuery({
+      question: 'test question',
+      expected_shape: 'scalar',
+      sessionPrincipal: 'test:production',
+      deadlineMs: 30_000,
+    });
+
+    // Exactly one aggregate should be emitted
+    expect(logGatewayQueryAggregateMock).toHaveBeenCalledTimes(1);
+    const aggregate = logGatewayQueryAggregateMock.mock.calls[0]?.[0];
+    expect(aggregate).toBeDefined();
+    expect(aggregate.session_id).toMatch(/^finny-/);
+    expect(aggregate.total_calls).toBe(1);
+    expect(aggregate.phases.initial.calls).toBe(1);
+    expect(aggregate.phases.correction.calls).toBe(0);
+    expect(aggregate.phases.progress_loop.calls).toBe(0);
+  });
+
+  it('gateway_query_aggregate reflects correction retries', async () => {
+    // First response: missing required fields
+    chatMock.mockResolvedValueOnce({
+      response: fenced({
+        status: 'ok',
+        intent_restated: 'mocked intent',
+        data: { shape: 'scalar', value: 42 },
+        env_used: 'production',
+      }),
+      model: 'mock',
+    });
+
+    // Second response: complete envelope
+    chatMock.mockResolvedValueOnce({
+      response: fenced({
+        status: 'ok',
+        intent_restated: 'mocked intent',
+        assumptions: [],
+        unanswered: [],
+        data: { shape: 'scalar', value: 42 },
+        sources: [],
+        confidence: 'high',
+        confidence_reason: 'deterministic',
+        env_used: 'production',
+      }),
+      model: 'mock',
+    });
+
+    await runQuery({
+      question: 'whatever',
+      expected_shape: 'scalar',
+      sessionPrincipal: 'test:production',
+      deadlineMs: 30_000,
+    });
+
+    expect(logGatewayQueryAggregateMock).toHaveBeenCalledTimes(1);
+    const aggregate = logGatewayQueryAggregateMock.mock.calls[0]?.[0];
+    expect(aggregate.total_calls).toBe(2);
+    expect(aggregate.phases.initial.calls).toBe(1);
+    expect(aggregate.phases.correction.calls).toBe(1);
+  });
+
+  it('logGatewayCall receives diagnostics with session_id and correction_retry flags', async () => {
+    chatMock.mockResolvedValueOnce({
+      response: fenced({
+        status: 'ok',
+        intent_restated: 'mocked',
+        assumptions: [],
+        unanswered: [],
+        data: { shape: 'scalar', value: 1 },
+        sources: [],
+        confidence: 'high',
+        confidence_reason: 'mock',
+        env_used: 'production',
+      }),
+      model: 'mock',
+    });
+
+    await runQuery({
+      question: 'test',
+      expected_shape: 'scalar',
+      sessionPrincipal: 'test:production',
+      deadlineMs: 30_000,
+    });
+
+    // Should have one logGatewayCall for the initial request
+    expect(logGatewayCallMock).toHaveBeenCalled();
+    const diagnostics = logGatewayCallMock.mock.calls[0]?.[2];
+    expect(diagnostics).toBeDefined();
+    expect(diagnostics.session_id).toMatch(/^finny-/);
+    expect(diagnostics.correction_retry).toBe(false);
+    expect(diagnostics.tool_loop_iter).toBe(0);
+  });
+
+  it('gateway_query_aggregate is emitted even on error paths', async () => {
+    chatMock.mockRejectedValueOnce(new Error('Mock error'));
+
+    const env = await runQuery({
+      question: 'test',
+      expected_shape: 'scalar',
+      sessionPrincipal: 'test:production',
+      deadlineMs: 30_000,
+    });
+
+    expect(env.status).toBe('error');
+    // Aggregate must be emitted even on error
+    expect(logGatewayQueryAggregateMock).toHaveBeenCalledTimes(1);
+    const aggregate = logGatewayQueryAggregateMock.mock.calls[0]?.[0];
+    expect(aggregate.total_calls).toBe(1);
+    expect(aggregate.phases.initial.calls).toBe(1);
   });
 });
