@@ -120,9 +120,7 @@ export function parseArguments(version: string): CliArgs {
       // Validate each item has required fields
       for (const item of parsed) {
         if (!item || typeof item.name !== 'string' || !item.name.trim()) {
-          throw new Error(
-            'Each instance in FINNY_INSTANCES must have a non-empty string "name"'
-          );
+          throw new Error('Each instance in FINNY_INSTANCES must have a non-empty string "name"');
         }
         if (typeof item.url !== 'string' || !item.url.trim()) {
           throw new Error(`Instance "${item.name}": must have a non-empty string "url"`);
