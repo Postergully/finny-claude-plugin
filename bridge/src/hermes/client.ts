@@ -33,7 +33,10 @@ export interface ChatWithToolsParams {
 // Workstream A (2026-06-08): raised 120s → 150s. GL queries regularly
 // take 90–120s end-to-end; the prior ceiling caused spurious retries.
 const DEFAULT_TIMEOUT_MS = 150_000;
-const MAX_RESPONSE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+// Workstream B (2026-06-08): raised 10MB → 25MB. Pass-through mode lets
+// cowork handle large data; cursor escape kicks in at 8MB serialized
+// page size (cursorStore), so 25MB gives headroom for the first chunk.
+const MAX_RESPONSE_SIZE_BYTES = 25 * 1024 * 1024; // 25MB
 const MAX_DEBUG_BODY_LENGTH = 4096;
 
 /**
@@ -186,12 +189,12 @@ export class HermesClient {
       // Validate response size before consuming the body
       const contentLength = response.headers.get('content-length');
       if (contentLength && parseInt(contentLength, 10) > MAX_RESPONSE_SIZE_BYTES) {
-        throw new HermesApiError('Response exceeds maximum allowed size (10MB)', 413);
+        throw new HermesApiError('Response exceeds maximum allowed size (25MB)', 413);
       }
 
       const text = await response.text();
       if (text.length > MAX_RESPONSE_SIZE_BYTES) {
-        throw new HermesApiError('Response exceeds maximum allowed size (10MB)', 413);
+        throw new HermesApiError('Response exceeds maximum allowed size (25MB)', 413);
       }
 
       return JSON.parse(text) as T;
