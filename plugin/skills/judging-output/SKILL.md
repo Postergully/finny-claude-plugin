@@ -44,8 +44,9 @@ When `status === 'running'`, read the `task_id` from either the top-level
 `data.rendered_markdown`; it's a debugging JSON blob (`{task_id,
 deadline_exceeded_ms}`), not the poll handle.
 
-Poll cadence: progressive backoff. Cap: 15 polls (~5 minutes total),
-aligned with the bridge's 300s `awaitTaskOrEscalate` deadline.
+Poll cadence: progressive backoff. Cap: 6 polls (~95 s of waits). The
+bridge's 300s `awaitTaskOrEscalate` deadline still bounds task lifetime
+from above.
 
 Schedule (cumulative wait time per poll):
 
@@ -53,38 +54,26 @@ Schedule (cumulative wait time per poll):
 |---|---|---|
 | 1 | 5 s | 5 s |
 | 2 | 5 s | 10 s |
-| 3 | 5 s | 15 s |
-| 4 | 5 s | 20 s |
-| 5 | 7 s | 27 s |
-| 6 | 7 s | 34 s |
-| 7 | 10 s | 44 s |
-| 8 | 10 s | 54 s |
-| 9 | 15 s | 69 s |
-| 10 | 15 s | 84 s |
-| 11 | 20 s | 104 s |
-| 12 | 20 s | 124 s |
-| 13 | 30 s | 154 s |
-| 14 | 30 s | 184 s |
-| 15 | 45 s | 229 s |
+| 3 | 10 s | 20 s |
+| 4 | 15 s | 35 s |
+| 5 | 30 s | 65 s |
+| 6 | 30 s | 95 s |
 
-After 15 polls (~4 min), if still `running`, stop and surface to the
-user: "Finny is still working on this — the query is unusually slow.
-Two options: (1) **wait longer** — Finny may finish in another minute;
-(2) **narrow the scope** — specify a single subsidiary (e.g., MTPL
-standalone) which usually speeds it up significantly." Frame option 1
-as "wait longer", NOT "try again with a longer deadline" — the user
-shouldn't think they need to re-issue the query; the bridge keeps
-working until its 300s deadline.
-
-Do not loop forever. The bridge's deadline (300s) bounds task lifetime
-from above, so the cap can't run away.
+After 6 polls (~95 s of waits, plus query time), if still `running`,
+stop and surface to the user: "Finny is still working on this — the
+query is unusually slow. Two options: (1) **wait longer** — Finny may
+finish in another minute; (2) **narrow the scope** — specify a single
+subsidiary (e.g., MTPL standalone) which usually speeds it up
+significantly." Frame option 1 as "wait longer", NOT "try again with
+a longer deadline" — the user shouldn't think they need to re-issue
+the query; the bridge keeps working until its 300s deadline.
 
 Real Finny latencies (measured 2026-05-14/15, n=4 chains):
 - p50 ≈ 149 s
 - p90 ≈ 183 s
 
-The 5-poll cap from v0.1.0 fired on ~100% of legitimate completions.
-The 15-poll backoff covers p90 + headroom.
+The 6-poll backoff covers p90 + headroom on the new 30s default
+deadline_ms.
 
 Each poll return goes through this skill again from Step 1 — a `running`
 poll can return `ok`, `partial`, `refused`, or `error` just like the
