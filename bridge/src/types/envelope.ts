@@ -46,6 +46,12 @@ const DataNarrative = z
 
 const DataSchema = z.discriminatedUnion('shape', [DataScalar, DataRows, DataNarrative]);
 
+// Decision (2026-06-08): `OUT_OF_SCOPE` is intentionally NOT in this enum.
+// Finny should emit `'refused'` for policy/safety/scope refusals. The judge
+// layer (judging-output) treats `'refused'` as terminal — never retried.
+// Agent-semantic self-reports (approval_required, needs_clarification) ride
+// on the `'other'` escape valve with the specific code in error.message.
+
 // Error code enum added per Phase 0 learnings §6.2 — downstream judge-loop
 // (M3 `judging-output` skill) branches on these values.
 //
