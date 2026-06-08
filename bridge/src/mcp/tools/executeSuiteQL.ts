@@ -15,7 +15,9 @@ const SUITEQL_DEADLINE_MS = 60_000;
 export const executeSuiteQLInputSchema = z.object({
   sql: z.string().min(1),
   env: z.enum(['sandbox', 'production']),
-  max_rows: z.number().int().positive().max(5000).default(500),
+  // Workstream B (2026-06-08): default 500 → 2000, hard cap 5000 → 10000.
+  // Cowork handles pagination via cursor when results exceed page size.
+  max_rows: z.number().int().positive().max(10000).default(2000),
   reason: z.string().min(1),
 });
 

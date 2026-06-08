@@ -198,13 +198,15 @@ export async function createHttpServer(
           res.redirect(redirectUrl);
         } catch (error) {
           logError('Google OAuth callback failed', error);
-          res.status(500).send(
-            `<html><body style="font-family:system-ui;padding:2rem;">` +
-            `<h2>Authentication failed</h2>` +
-            `<p>${error instanceof Error ? error.message : 'Unknown error'}</p>` +
-            `<p><a href="javascript:window.close()">Close this window</a> and try again.</p>` +
-            `</body></html>`
-          );
+          res
+            .status(500)
+            .send(
+              `<html><body style="font-family:system-ui;padding:2rem;">` +
+                `<h2>Authentication failed</h2>` +
+                `<p>${error instanceof Error ? error.message : 'Unknown error'}</p>` +
+                `<p><a href="javascript:window.close()">Close this window</a> and try again.</p>` +
+                `</body></html>`
+            );
         }
       });
 

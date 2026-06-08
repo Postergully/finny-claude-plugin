@@ -246,8 +246,8 @@ describe('HermesClient', () => {
       await expect(fastClient.chat('test')).rejects.toThrow(/timed out/);
     });
 
-    it('rejects responses with Content-Length exceeding 10MB', async () => {
-      const oversizeLength = String(11 * 1024 * 1024);
+    it('rejects responses with Content-Length exceeding 25MB', async () => {
+      const oversizeLength = String(26 * 1024 * 1024);
       fetchSpy.mockResolvedValue({
         ok: true,
         status: 200,
@@ -259,11 +259,11 @@ describe('HermesClient', () => {
       });
 
       await expect(client.chat('test')).rejects.toThrow(HermesApiError);
-      await expect(client.chat('test')).rejects.toThrow(/10MB/);
+      await expect(client.chat('test')).rejects.toThrow(/25MB/);
     });
 
-    it('rejects responses with body exceeding 10MB', async () => {
-      const largeBody = 'x'.repeat(10 * 1024 * 1024 + 1);
+    it('rejects responses with body exceeding 25MB', async () => {
+      const largeBody = 'x'.repeat(25 * 1024 * 1024 + 1);
       fetchSpy.mockResolvedValue({
         ok: true,
         status: 200,
@@ -275,7 +275,7 @@ describe('HermesClient', () => {
       });
 
       await expect(client.chat('test')).rejects.toThrow(HermesApiError);
-      await expect(client.chat('test')).rejects.toThrow(/10MB/);
+      await expect(client.chat('test')).rejects.toThrow(/25MB/);
     });
   });
 

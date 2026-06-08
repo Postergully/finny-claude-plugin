@@ -211,3 +211,90 @@ describe('FinnyEnvelopeSchema', () => {
     }
   });
 });
+
+describe('envelope schema relaxations (Workstream A)', () => {
+  const baseEnv = {
+    status: 'ok',
+    intent_restated: 'test',
+    assumptions: [],
+    unanswered: [],
+    data: { shape: 'scalar' as const, value: 1 },
+    sources: [{ kind: 'suiteql' as const, ref: 'SELECT 1', rows_scanned: null }],
+    confidence: 'high' as const,
+    confidence_reason: 'test',
+    elapsed_ms: 0,
+    env_used: 'production' as const,
+    bridge_version: '0.0.1',
+    finny_session_id: 'finny-test',
+  };
+
+  it('accepts rows_scanned: null on a source', () => {
+    const result = FinnyEnvelopeSchema.safeParse(baseEnv);
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts error without retryable field', () => {
+    const env = {
+      ...baseEnv,
+      status: 'error' as const,
+      data: null,
+      error: { code: 'internal' as const, message: 'boom' },
+    };
+    const result = FinnyEnvelopeSchema.safeParse(env);
+    expect(result.success).toBe(true);
+  });
+
+  it('still accepts error with retryable: true', () => {
+    const env = {
+      ...baseEnv,
+      status: 'error' as const,
+      data: null,
+      error: { code: 'internal' as const, message: 'boom', retryable: true },
+    };
+    const result = FinnyEnvelopeSchema.safeParse(env);
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('next_cursor in DataRows (Workstream B)', () => {
+  const rowsBase = {
+    status: 'ok' as const,
+    intent_restated: 'test',
+    assumptions: [],
+    unanswered: [],
+    sources: [],
+    confidence: 'high' as const,
+    confidence_reason: 'test',
+    elapsed_ms: 0,
+    env_used: 'production' as const,
+    bridge_version: '0.0.1',
+    finny_session_id: 'finny-test',
+  };
+
+  it('accepts next_cursor on a rows envelope', () => {
+    const env = {
+      ...rowsBase,
+      data: {
+        shape: 'rows' as const,
+        columns: ['a'],
+        rows: [[1], [2]],
+        next_cursor: 'cursor-abc',
+      },
+    };
+    const result = FinnyEnvelopeSchema.safeParse(env);
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts rows envelope without next_cursor', () => {
+    const env = {
+      ...rowsBase,
+      data: {
+        shape: 'rows' as const,
+        columns: ['a'],
+        rows: [[1]],
+      },
+    };
+    const result = FinnyEnvelopeSchema.safeParse(env);
+    expect(result.success).toBe(true);
+  });
+});

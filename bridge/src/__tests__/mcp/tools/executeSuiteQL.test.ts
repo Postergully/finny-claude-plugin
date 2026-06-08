@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FinnyEnvelopeSchema } from '../../../types/envelope.js';
+import { executeSuiteQLInputSchema } from '../../../mcp/tools/executeSuiteQL.js';
 
 // Mock the HermesClient constructor + chat() so the happy path doesn't
 // touch the real gateway. Hoisted so the mock is registered before the
@@ -201,5 +202,36 @@ describe('finny_executeSuiteQL — happy path + logging', () => {
     });
     expect(res.status).toBe('error');
     expect(res.error?.code).toBe('envelope_parse_failed');
+  });
+});
+
+describe('executeSuiteQL ceilings (Workstream B)', () => {
+  it('defaults max_rows to 2000', () => {
+    const parsed = executeSuiteQLInputSchema.parse({
+      sql: 'SELECT 1',
+      env: 'production',
+      reason: 'test',
+    });
+    expect(parsed.max_rows).toBe(2000);
+  });
+
+  it('accepts max_rows up to 10000', () => {
+    const parsed = executeSuiteQLInputSchema.parse({
+      sql: 'SELECT 1',
+      env: 'production',
+      max_rows: 10000,
+      reason: 'test',
+    });
+    expect(parsed.max_rows).toBe(10000);
+  });
+
+  it('rejects max_rows above 10000', () => {
+    const result = executeSuiteQLInputSchema.safeParse({
+      sql: 'SELECT 1',
+      env: 'production',
+      max_rows: 10001,
+      reason: 'test',
+    });
+    expect(result.success).toBe(false);
   });
 });
