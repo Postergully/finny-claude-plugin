@@ -315,6 +315,45 @@ categories are strictly hands-off:
   reformat for "friendliness". If the user asked for a specific format,
   go back to Finny with that in the question.
 
+## Cursor pagination — what `next_cursor` means
+
+When a `rows` envelope contains `data.next_cursor`, the bridge truncated the
+result at the row/byte ceiling (2000 rows / 8 MB serialized per page). The
+remainder is buffered server-side under the opaque cursor token.
+
+To fetch more rows:
+
+```json
+finny_continue({ "cursor": "<next_cursor value>" })
+```
+
+The result is a fresh envelope with the next page of rows and (if more
+remain) a new `next_cursor`.
+
+### Decision: drain or stop?
+
+- If the user wants a **complete export** (e.g., "show me all open bills"),
+  drain the cursor: keep calling `finny_continue({cursor})` until
+  `next_cursor` is absent.
+- If the user wants a **sample or top-N** (e.g., "the top 10 vendors") and
+  the first page already contains the answer, stop — do not drain. Surface
+  to the user that more rows are available if needed.
+- If you stop with rows still buffered, the cursor expires after 10 minutes
+  of idleness. Restart from `finny_query` to re-fetch.
+
+### Do NOT summarize or truncate raw rows
+
+Even when many rows arrive, surface them through to the user (or to a
+downstream rendering tool — e.g., a dashboard). Do not collapse rows into
+a written summary unless the user asked for one. Pass-through is the design.
+
+### Cursor errors
+
+If `finny_continue({cursor})` returns `error.code: 'other'` with a message
+about an unknown or expired cursor, the buffered remainder has aged out.
+Restart from `finny_query` — do NOT retry `finny_continue` on the same
+cursor.
+
 ## Unanswered bucket
 
 A non-empty `unanswered[]` means Finny tried to cover the question but
