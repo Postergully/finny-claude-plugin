@@ -24,6 +24,7 @@ import { classifyError } from './classifyError.js';
 import { createConversation } from './conversationStore.js';
 import { log } from '../../../utils/logger.js';
 import { runChatWithTools } from './toolDispatcher.js';
+import { storeCursor } from './cursorStore.js';
 
 const BRIDGE_VERSION = '0.0.1';
 
@@ -362,6 +363,48 @@ function maybeRegisterNeedsInput(env: FinnyEnvelope, params: RunQueryParams): Fi
   };
 }
 
+const CURSOR_ROW_CEILING = 2000;
+const CURSOR_BYTE_CEILING = 8 * 1024 * 1024; // 8 MB
+
+// Workstream B (2026-06-08): if a rows envelope exceeds the row or byte
+// ceiling, store the remainder under a cursor and emit next_cursor on
+// the envelope. Cowork resumes via finny_continue({cursor}).
+export function applyCursorEscape(
+  env: FinnyEnvelope,
+  sessionPrincipal: string
+): FinnyEnvelope {
+  if (!env.data || env.data.shape !== 'rows') return env;
+  const rows = env.data.rows;
+  const serializedSize = JSON.stringify(rows).length;
+  const overRows = rows.length > CURSOR_ROW_CEILING;
+  const overBytes = serializedSize > CURSOR_BYTE_CEILING;
+  if (!overRows && !overBytes) return env;
+
+  let pageSize = Math.min(rows.length, CURSOR_ROW_CEILING);
+  while (
+    pageSize > 1 &&
+    JSON.stringify(rows.slice(0, pageSize)).length > CURSOR_BYTE_CEILING
+  ) {
+    pageSize = Math.floor(pageSize / 2);
+  }
+
+  const head = rows.slice(0, pageSize);
+  const tail = rows.slice(pageSize);
+  const cursor = storeCursor({
+    columns: env.data.columns as Array<string | { name: string; type: string }>,
+    remaining: tail,
+    sessionPrincipal,
+  });
+  return {
+    ...env,
+    data: {
+      ...env.data,
+      rows: head,
+      next_cursor: cursor,
+    },
+  };
+}
+
 // Track G: Discover phase violation detection.
 //
 // When Finny probes NetSuite during phase: 'discover' (despite the prompt
@@ -379,8 +422,8 @@ function detectDiscoverViolation(env: FinnyEnvelope, params: RunQueryParams): bo
 }
 
 // Single chokepoint for envelope post-processing: discover-violation
-// surfacing first, then needs_input registration. Runs at every successful
-// validation point in runQuery (initial parse, post-correction parse,
+// surfacing first, then needs_input registration, then cursor escape (Workstream B).
+// Runs at every successful validation point in runQuery (initial parse, post-correction parse,
 // post-correction-with-no-JSON parse).
 function finalizeEnvelope(env: FinnyEnvelope, params: RunQueryParams): FinnyEnvelope {
   if (detectDiscoverViolation(env, params)) {
@@ -395,9 +438,9 @@ function finalizeEnvelope(env: FinnyEnvelope, params: RunQueryParams): FinnyEnve
       ...env,
       confidence_reason: `${env.confidence_reason} [bridge: discover phase ran live NetSuite queries — see bridge log for discover_violation]`,
     };
-    return maybeRegisterNeedsInput(annotated, params);
+    return applyCursorEscape(maybeRegisterNeedsInput(annotated, params), params.sessionPrincipal);
   }
-  return maybeRegisterNeedsInput(env, params);
+  return applyCursorEscape(maybeRegisterNeedsInput(env, params), params.sessionPrincipal);
 }
 
 export { maybeRegisterNeedsInput, finalizeEnvelope };
