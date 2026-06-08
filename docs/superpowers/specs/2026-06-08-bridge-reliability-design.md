@@ -34,6 +34,7 @@ Single combined PR with three workstreams: A (schema/timeouts), B (payloads), C 
 | File | Change |
 |---|---|
 | `bridge/src/types/envelope.ts:76` | `retryable: z.boolean()` → `z.boolean().optional()` |
+| `bridge/src/types/envelope.ts:12` | `rows_scanned: z.number().int().nonnegative().optional()` → add `.nullable()` so Finny may emit `null` without triggering envelope rejection. Defensive fix to cut retries on unpatched Finny sessions. |
 | `bridge/src/types/envelope.ts:61-71` | Add comment documenting that `OUT_OF_SCOPE` is intentionally absent; canonical refusal code is `'refused'`. No enum change. |
 | `bridge/src/hermes/client.ts:33` | `DEFAULT_TIMEOUT_MS = 120_000` → `150_000` |
 | `bridge/src/mcp/tools/query.ts:41` and equivalents in `report.ts` | Default `deadline_ms` 10_000 → 30_000 |
@@ -53,14 +54,14 @@ Single combined PR with three workstreams: A (schema/timeouts), B (payloads), C 
 **Risk:** Medium. Higher caps could blow cowork context window; cursor is the safety net.
 
 ### Approach
-Default to raw pass-through up to a generous ceiling. If a result would exceed the ceiling, the bridge returns the first chunk plus `next_cursor`, and cowork fetches subsequent pages via `finny_continue({cursor})`.
+Default to raw pass-through up to a modest ceiling. If a result would exceed the ceiling, the bridge returns the first chunk plus `next_cursor`, and cowork fetches subsequent pages via `finny_continue({cursor})`. Threshold tuned conservatively so cowork context doesn't blow out on large GL exports.
 
 ### Changes
 
 | File | Change |
 |---|---|
-| `bridge/src/mcp/tools/executeSuiteQL.ts:18` | `max_rows` default 500 → 5000, hard cap 5000 → 20000 |
-| `bridge/src/hermes/client.ts:34` | `MAX_RESPONSE_SIZE_BYTES = 10MB` → `50MB` |
+| `bridge/src/mcp/tools/executeSuiteQL.ts:18` | `max_rows` default 500 → 2000, hard cap 5000 → 10000 |
+| `bridge/src/hermes/client.ts:34` | `MAX_RESPONSE_SIZE_BYTES = 10MB` → `25MB` |
 | `bridge/src/mcp/tools/_shared/suiteqlGuard.ts:47` | Update preamble to reflect new row ceiling |
 | `bridge/src/types/envelope.ts` (data shape `rows`) | Add optional `next_cursor: z.string().optional()` |
 | `bridge/src/mcp/tools/_shared/conversationStore.ts` | Extend to store cursor state keyed by `task_id` (cursor → remaining rows reference) |
@@ -68,17 +69,17 @@ Default to raw pass-through up to a generous ceiling. If a result would exceed t
 | `plugin/skills/judging-output/SKILL.md` | Document: do not summarize raw rows; if `next_cursor` present, cowork should call `finny_continue({cursor})` to fetch more, or stop if user only needs a sample |
 
 ### Cursor mechanics
-- Cursor triggered when result rows > 20000 OR serialized JSON > 50 MB.
-- First envelope returns up to ceiling rows + `next_cursor: <opaque token>`.
-- `finny_continue({cursor})` returns next chunk of same shape with new `next_cursor` (or absent on final page).
+- Cursor triggered when result rows > 2000 OR serialized JSON > 8 MB.
+- First envelope returns up to 2000 rows + `next_cursor: <opaque token>`.
+- `finny_continue({cursor})` returns next chunk (page size 2000) with new `next_cursor` (or absent on final page).
 - Cursor state TTL: 10 minutes, evicted from `conversationStore`.
 
 ### Tests
-- Unit: 3000-row stub result returns inline, no cursor.
-- Unit: 25000-row stub result returns 20000 rows + `next_cursor`; second call drains remaining 5000 with no cursor.
-- Unit: 60 MB stub result triggers cursor at byte ceiling, not row ceiling.
+- Unit: 1500-row stub result returns inline, no cursor.
+- Unit: 5000-row stub result returns first 2000 + `next_cursor`; two more `finny_continue` calls drain remaining 3000.
+- Unit: 12 MB stub result triggers cursor at byte ceiling, not row ceiling.
 - Unit: expired cursor returns explicit `error.code = 'other'` with `retryable: false`.
-- Integration: real `executeSuiteQL` against stub Hermes returns 5000 rows by default without truncation.
+- Integration: real `executeSuiteQL` against stub Hermes returns 2000 rows by default without truncation.
 
 ---
 
@@ -120,8 +121,8 @@ Before any optimization work in a future spec:
 
 ### Manual scenarios
 1. **Long GL query** — Issue a complex GL P&L query against staging. Expect: returns inline within 30s, or returns `running` and resolves on first or second poll.
-2. **Large dataset** — Issue a SuiteQL returning ~3000 rows. Expect: single envelope, no cursor, all rows present.
-3. **Huge dataset** — Issue a SuiteQL returning ~25000 rows. Expect: first envelope has 20000 + `next_cursor`; `finny_continue({cursor})` returns remaining 5000.
+2. **Modest dataset** — Issue a SuiteQL returning ~1500 rows. Expect: single envelope, no cursor, all rows present.
+3. **Large dataset** — Issue a SuiteQL returning ~5000 rows. Expect: first envelope has 2000 + `next_cursor`; two `finny_continue({cursor})` calls drain remaining 3000.
 4. **Session churn check** — Run `bridge-watch` while issuing 10 sequential queries on the same principal. Expect: `session_created` increments at most once.
 5. **Schema relaxation** — Send mock Finny envelope with `error` block lacking `retryable`. Expect: parses cleanly.
 
