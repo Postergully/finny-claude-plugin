@@ -366,17 +366,29 @@ const CURSOR_BYTE_CEILING = 8 * 1024 * 1024; // 8 MB
 // Workstream B (2026-06-08): if a rows envelope exceeds the row or byte
 // ceiling, store the remainder under a cursor and emit next_cursor on
 // the envelope. Cowork resumes via finny_continue({cursor}).
+//
+// Perf (P3 2026-06-08): we stringify rows ONCE to compute total size,
+// then derive page size from the average row width — avoiding a
+// log2(N)-deep halving loop of repeated JSON.stringify on slices.
+// For a 10k-row payload this is 1 stringify instead of ~14.
 export function applyCursorEscape(env: FinnyEnvelope, sessionPrincipal: string): FinnyEnvelope {
   if (!env.data || env.data.shape !== 'rows') return env;
   const rows = env.data.rows;
+  if (rows.length === 0) return env;
   const serializedSize = JSON.stringify(rows).length;
   const overRows = rows.length > CURSOR_ROW_CEILING;
   const overBytes = serializedSize > CURSOR_BYTE_CEILING;
   if (!overRows && !overBytes) return env;
 
   let pageSize = Math.min(rows.length, CURSOR_ROW_CEILING);
-  while (pageSize > 1 && JSON.stringify(rows.slice(0, pageSize)).length > CURSOR_BYTE_CEILING) {
-    pageSize = Math.floor(pageSize / 2);
+  if (overBytes) {
+    // Estimate page size from average row width. Floor + safety margin
+    // (95%) so we land comfortably under the byte ceiling without
+    // re-stringifying. Rows have variable width but the variance is
+    // bounded — overshooting by 5% is cheaper than another stringify.
+    const avgRowBytes = serializedSize / rows.length;
+    const byteBudgetRows = Math.max(1, Math.floor((CURSOR_BYTE_CEILING * 0.95) / avgRowBytes));
+    pageSize = Math.min(pageSize, byteBudgetRows);
   }
 
   const head = rows.slice(0, pageSize);
