@@ -11,7 +11,11 @@ import { FinnyEnvelopeSchema, type FinnyEnvelope } from '../../../types/envelope
 import { DEFAULT_FINNY_UPSTREAM_URL, DEFAULT_MODEL } from '../../../config/constants.js';
 import type { BlessListEntry } from '../../../intents/types.js';
 import { buildQuerySystemPrompt } from './systemPrompt.js';
-import { extractEnvelopeJSON, buildCorrectionPrompt } from './parseEnvelope.js';
+import {
+  extractEnvelopeJSON,
+  buildCorrectionPrompt,
+  formatValidationDiagnostic,
+} from './parseEnvelope.js';
 import {
   logGatewayCall,
   logGatewayQueryAggregate,
@@ -239,7 +243,11 @@ export async function runQuery(params: RunQueryParams): Promise<FinnyEnvelope> {
           if (validation2.success) return finalizeEnvelope(validation2.data, params);
           return errorEnvelope({
             code: 'envelope_parse_failed',
-            message: `Correction retry still invalid: ${validation2.error.issues[0]?.message ?? 'unknown'}`,
+            message: formatValidationDiagnostic(
+              parsedSecond,
+              validation2.error.issues,
+              'Correction retry still invalid'
+            ),
             retryable: false,
             elapsedMs: Date.now() - started,
             envUsed,
@@ -288,7 +296,11 @@ export async function runQuery(params: RunQueryParams): Promise<FinnyEnvelope> {
         if (validation.success) return finalizeEnvelope(validation.data, params);
         return errorEnvelope({
           code: 'envelope_parse_failed',
-          message: `Correction retry still invalid: ${validation.error.issues[0]?.message ?? 'unknown'}`,
+          message: formatValidationDiagnostic(
+            parsedSecond,
+            validation.error.issues,
+            'Correction retry still invalid'
+          ),
           retryable: false,
           elapsedMs: Date.now() - started,
           envUsed,
