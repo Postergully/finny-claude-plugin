@@ -28,7 +28,6 @@ import { mcpAuthRouter } from '@modelcontextprotocol/sdk/server/auth/router.js';
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
 
 import { HermesAuthProvider, type AuthProviderConfig } from '../auth/provider.js';
-import { exchangeGoogleCode } from '../auth/google.js';
 import { log, logError } from '../utils/logger.js';
 import { createMcpServer, type ToolRegistrationDeps } from './tools-registration.js';
 import { registerReadyRoute } from './ready.js';
@@ -169,49 +168,12 @@ export async function createHttpServer(
 
   // --- OAuth routes (if auth enabled) ---
   let authMiddleware: ((req: Request, res: Response, next: NextFunction) => void) | undefined;
-  let provider: HermesAuthProvider | undefined;
 
   if (authEnabled) {
-    provider = new HermesAuthProvider(config.authConfig!);
+    const provider = new HermesAuthProvider(config.authConfig!);
     const issuerUrl = config.issuerUrl
       ? new URL(config.issuerUrl)
       : new URL(`http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
-
-    // --- Google OAuth callback (before mcpAuthRouter, no MCP auth needed) ---
-    if (process.env.AUTH_REQUIRE_LOGIN === 'true') {
-      app.get('/auth/google/callback', async (req: Request, res: Response) => {
-        const googleCode = req.query.code as string | undefined;
-        const pendingId = req.query.state as string | undefined;
-
-        if (!googleCode || !pendingId) {
-          res.status(400).send('Missing code or state parameter from Google');
-          return;
-        }
-
-        try {
-          const googleRedirectUri = `${issuerUrl.toString().replace(/\/$/, '')}/auth/google/callback`;
-          const userInfo = await exchangeGoogleCode(googleCode, googleRedirectUri);
-
-          log(`Google login successful: ${userInfo.email}`);
-
-          const redirectUrl = provider!.completeAuthorization(pendingId, userInfo.email);
-          res.redirect(redirectUrl);
-        } catch (error) {
-          logError('Google OAuth callback failed', error);
-          res
-            .status(500)
-            .send(
-              `<html><body style="font-family:system-ui;padding:2rem;">` +
-                `<h2>Authentication failed</h2>` +
-                `<p>${error instanceof Error ? error.message : 'Unknown error'}</p>` +
-                `<p><a href="javascript:window.close()">Close this window</a> and try again.</p>` +
-                `</body></html>`
-            );
-        }
-      });
-
-      log('Google OAuth login enabled (AUTH_REQUIRE_LOGIN=true)');
-    }
 
     // Install OAuth endpoints: /authorize, /token, /register, /revoke
     // and .well-known discovery metadata
@@ -247,7 +209,6 @@ export async function createHttpServer(
       status: 'ok',
       transport: 'http',
       auth: authEnabled,
-      loginRequired: process.env.AUTH_REQUIRE_LOGIN === 'true',
     });
   });
 
@@ -353,9 +314,6 @@ export async function createHttpServer(
       log('  GET  /.well-known/oauth-protected-resource/mcp        - Protected resource metadata');
       log('  POST /authorize                                       - Authorization');
       log('  POST /token                                           - Token exchange');
-      if (process.env.AUTH_REQUIRE_LOGIN === 'true') {
-        log('  GET  /auth/google/callback                            - Google OAuth callback');
-      }
     } else {
       log('WARNING: Auth is DISABLED - server is open to anyone!');
     }
