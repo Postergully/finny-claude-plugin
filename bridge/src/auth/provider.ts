@@ -424,7 +424,6 @@ export class HermesAuthProvider implements OAuthServerProvider {
       scopes: tokenData.scopes,
       expiresAt: Math.floor(tokenData.expiresAt / 1000),
       resource: tokenData.resource,
-      // @ts-expect-error — extending AuthInfo with subject for access log consumption
       subject: tokenData.userEmail,
     } as AuthInfo;
   }

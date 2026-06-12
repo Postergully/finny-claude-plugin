@@ -19,7 +19,7 @@ export const reportInputSchema = z.object({
   env: z.enum(['sandbox', 'production']).default('production'),
   // Mirror finny_query's async knob. The underlying chat task keeps running
   // beyond this deadline; cowork resumes via finny_task_status.
-  deadline_ms: z.number().int().positive().max(300_000).default(10_000),
+  deadline_ms: z.number().int().positive().max(300_000).default(30_000),
   sessionId: z.string().optional(),
 });
 

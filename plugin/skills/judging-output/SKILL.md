@@ -44,8 +44,9 @@ When `status === 'running'`, read the `task_id` from either the top-level
 `data.rendered_markdown`; it's a debugging JSON blob (`{task_id,
 deadline_exceeded_ms}`), not the poll handle.
 
-Poll cadence: progressive backoff. Cap: 15 polls (~5 minutes total),
-aligned with the bridge's 300s `awaitTaskOrEscalate` deadline.
+Poll cadence: progressive backoff. Cap: 6 polls (~95 s of waits). The
+bridge's 300s `awaitTaskOrEscalate` deadline still bounds task lifetime
+from above.
 
 Schedule (cumulative wait time per poll):
 
@@ -53,38 +54,26 @@ Schedule (cumulative wait time per poll):
 |---|---|---|
 | 1 | 5 s | 5 s |
 | 2 | 5 s | 10 s |
-| 3 | 5 s | 15 s |
-| 4 | 5 s | 20 s |
-| 5 | 7 s | 27 s |
-| 6 | 7 s | 34 s |
-| 7 | 10 s | 44 s |
-| 8 | 10 s | 54 s |
-| 9 | 15 s | 69 s |
-| 10 | 15 s | 84 s |
-| 11 | 20 s | 104 s |
-| 12 | 20 s | 124 s |
-| 13 | 30 s | 154 s |
-| 14 | 30 s | 184 s |
-| 15 | 45 s | 229 s |
+| 3 | 10 s | 20 s |
+| 4 | 15 s | 35 s |
+| 5 | 30 s | 65 s |
+| 6 | 30 s | 95 s |
 
-After 15 polls (~4 min), if still `running`, stop and surface to the
-user: "Finny is still working on this — the query is unusually slow.
-Two options: (1) **wait longer** — Finny may finish in another minute;
-(2) **narrow the scope** — specify a single subsidiary (e.g., MTPL
-standalone) which usually speeds it up significantly." Frame option 1
-as "wait longer", NOT "try again with a longer deadline" — the user
-shouldn't think they need to re-issue the query; the bridge keeps
-working until its 300s deadline.
-
-Do not loop forever. The bridge's deadline (300s) bounds task lifetime
-from above, so the cap can't run away.
+After 6 polls (~95 s of waits, plus query time), if still `running`,
+stop and surface to the user: "Finny is still working on this — the
+query is unusually slow. Two options: (1) **wait longer** — Finny may
+finish in another minute; (2) **narrow the scope** — specify a single
+subsidiary (e.g., MTPL standalone) which usually speeds it up
+significantly." Frame option 1 as "wait longer", NOT "try again with
+a longer deadline" — the user shouldn't think they need to re-issue
+the query; the bridge keeps working until its 300s deadline.
 
 Real Finny latencies (measured 2026-05-14/15, n=4 chains):
 - p50 ≈ 149 s
 - p90 ≈ 183 s
 
-The 5-poll cap from v0.1.0 fired on ~100% of legitimate completions.
-The 15-poll backoff covers p90 + headroom.
+The 6-poll backoff covers p90 + headroom on the new 30s default
+deadline_ms.
 
 Each poll return goes through this skill again from Step 1 — a `running`
 poll can return `ok`, `partial`, `refused`, or `error` just like the
@@ -325,6 +314,45 @@ categories are strictly hands-off:
 - **Dates** — NetSuite's native format. Do not re-parse into ISO, do not
   reformat for "friendliness". If the user asked for a specific format,
   go back to Finny with that in the question.
+
+## Cursor pagination — what `next_cursor` means
+
+When a `rows` envelope contains `data.next_cursor`, the bridge truncated the
+result at the row/byte ceiling (2000 rows / 8 MB serialized per page). The
+remainder is buffered server-side under the opaque cursor token.
+
+To fetch more rows:
+
+```json
+finny_continue({ "cursor": "<next_cursor value>" })
+```
+
+The result is a fresh envelope with the next page of rows and (if more
+remain) a new `next_cursor`.
+
+### Decision: drain or stop?
+
+- If the user wants a **complete export** (e.g., "show me all open bills"),
+  drain the cursor: keep calling `finny_continue({cursor})` until
+  `next_cursor` is absent.
+- If the user wants a **sample or top-N** (e.g., "the top 10 vendors") and
+  the first page already contains the answer, stop — do not drain. Surface
+  to the user that more rows are available if needed.
+- If you stop with rows still buffered, the cursor expires after 10 minutes
+  of idleness. Restart from `finny_query` to re-fetch.
+
+### Do NOT summarize or truncate raw rows
+
+Even when many rows arrive, surface them through to the user (or to a
+downstream rendering tool — e.g., a dashboard). Do not collapse rows into
+a written summary unless the user asked for one. Pass-through is the design.
+
+### Cursor errors
+
+If `finny_continue({cursor})` returns `error.code: 'other'` with a message
+about an unknown or expired cursor, the buffered remainder has aged out.
+Restart from `finny_query` — do NOT retry `finny_continue` on the same
+cursor.
 
 ## Unanswered bucket
 

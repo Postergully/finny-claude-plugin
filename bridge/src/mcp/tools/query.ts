@@ -38,7 +38,7 @@ export const queryInputSchema = z
     max_tokens: z.number().int().positive().max(8000).default(2000),
     // Async-by-default (§10.1/§10.2): deadline_ms is the *wait* budget the
     // bridge blocks before returning a `running` envelope with task_id.
-    deadline_ms: z.number().int().positive().max(300_000).default(10_000),
+    deadline_ms: z.number().int().positive().max(300_000).default(30_000),
     sessionId: z.string().optional(),
   })
   .refine(
