@@ -72,9 +72,9 @@ interface PendingAuth {
   createdAt: number;
 }
 
-const TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+const TOKEN_TTL_MS = 10 * 365 * 24 * 60 * 60 * 1000; // 10 years (effectively never expires)
 const AUTH_CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-const REFRESH_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const REFRESH_TOKEN_TTL_MS = 10 * 365 * 24 * 60 * 60 * 1000; // 10 years (effectively never expires)
 const REAPER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 // An array that says "yes" to any .includes() check.
