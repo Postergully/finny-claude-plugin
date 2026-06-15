@@ -18,8 +18,8 @@
 - DNS: `finny.staging.11mirror.com → 34.232.186.238` in Route53 zone `Z01920243UX91ZKYKCMPA` (`staging.11mirror.com`)
 - Tailscale tailnet IP: `100.112.31.24`, hostname `finny-staging`
 - SSH keypair: `finny-staging-key` (private at `~/.ssh/finny-staging-key.pem` on user's Mac); `~/.ssh/authorized_keys` rewritten to contain only this public key
-- Hermes editable venv (gateway + dashboard both run from this): `/home/ubuntu/.hermes/hermes-agent/venv/bin/hermes` (`hermes-agent v0.14.0`, Python 3.11.15)
-- Hermes orphan venv (still on disk, no longer used by any unit on staging): `/home/ubuntu/hermes-venv/bin/hermes` — see `[[hermes-venv-mismatch]]` note
+- Hermes gateway venv (matches prod): `/home/ubuntu/hermes-venv/bin/python` — what `hermes-gateway.service` runs from. Despite the `[[hermes-venv-mismatch]]` memory's framing, this is the venv that actually works for NetSuite — see §7.
+- Hermes editable-install venv: `/home/ubuntu/.hermes/hermes-agent/venv/bin/hermes` — used by `hermes-dashboard.service` and CLI invocations. `hermes-agent v0.14.0`, Python 3.11.15.
 - EBS snapshot of pre-termination old staging: `snap-0750e633f9a5e1500` (insurance, delete after first prod-deploy round-trip works)
 
 ## Plan-vs-reality corrections (caught at first build, baked into v1 procedure below)
@@ -133,56 +133,57 @@ curl -s http://100.112.31.24:9119/ | grep -o '__HERMES_SESSION_TOKEN__="[^"]*"' 
 
 Paste into desktop app's "Session token" field. **Token rotates on every dashboard restart** — you'll re-paste after refresh / reboot / unit restart. This is a v0.14 limitation; newer Hermes versions add `HERMES_DASHBOARD_BASIC_AUTH_*` env vars (and a Sign-in button in the desktop app). Captured as a TODO when Hermes is upgraded via the staging-promotion flow.
 
-### 6. Hermes profile: clone `finny` → `staging`, scrub Slack, switch active
+### 6. Hermes profile: clone `finny` → `staging`, scrub Slack, copy creds, switch active
+
+**Critical gotcha:** when a non-default profile is active, Hermes loads env from `~/.hermes/profiles/<name>/.env`, **NOT** `~/.hermes/.env`. The profile dir's `.env` only has `API_SERVER_*` keys by default — NetSuite/Hindsight/GitHub credentials live only in the global `~/.hermes/.env`. If you don't copy them in, the gateway runs but tools return `gateway_unreachable: NetSuite credentials not configured`. Prod runs the implicit `default` profile (no profile dir → reads global `.env`), which is why prod doesn't hit this. Staging has its own profile dir → must replicate the credential set.
 
 ```bash
 sudo -iu ubuntu cp -r /home/ubuntu/.hermes/profiles/finny /home/ubuntu/.hermes/profiles/staging
-# Drop Slack from staging profile's .env if any:
+
+# Drop Slack from staging profile's .env if any (defensive — usually not present):
 sudo -iu ubuntu test -f /home/ubuntu/.hermes/profiles/staging/.env && \
   sudo -iu ubuntu sed -i '/SLACK_/d' /home/ubuntu/.hermes/profiles/staging/.env
+
+# Append NetSuite/Hindsight/GitHub credentials from global .env into staging profile .env.
+# Append (>>) is intentional — preserves existing API_SERVER_* keys.
+sudo -iu ubuntu bash -c 'grep -E "^(NETSUITE_|HINDSIGHT_|GITHUB_TOKEN)" /home/ubuntu/.hermes/.env >> /home/ubuntu/.hermes/profiles/staging/.env'
+
+# Dedupe in case this step ran twice (idempotent guard):
+sudo -iu ubuntu python3 - <<'PY'
+seen=set(); out=[]
+for line in open("/home/ubuntu/.hermes/profiles/staging/.env"):
+    s=line.rstrip("\n")
+    if not s or s.startswith("#"): out.append(line); continue
+    k=s.split("=",1)[0]
+    if k in seen: continue
+    seen.add(k); out.append(line)
+open("/home/ubuntu/.hermes/profiles/staging/.env","w").writelines(out)
+PY
+sudo -iu ubuntu chmod 600 /home/ubuntu/.hermes/profiles/staging/.env
+
+# Verify (key counts only — values never echoed):
+for K in NETSUITE_ACCOUNT_ID NETSUITE_CONSUMER_KEY NETSUITE_CONSUMER_SECRET \
+         NETSUITE_TOKEN_ID NETSUITE_TOKEN_SECRET HINDSIGHT_API_KEY \
+         HINDSIGHT_TIMEOUT GITHUB_TOKEN; do
+  COUNT=$(sudo -iu ubuntu grep -cE "^${K}=" /home/ubuntu/.hermes/profiles/staging/.env)
+  echo "$K: $COUNT"  # each should print 1
+done
+
+# Switch active profile:
 sudo -iu ubuntu /home/ubuntu/.hermes/hermes-agent/venv/bin/hermes profile use staging
 sudo -iu ubuntu /home/ubuntu/.hermes/hermes-agent/venv/bin/hermes profile list
 # Confirm ◆ marker is on `staging`
 ```
 
-### 7. Fix `hermes-gateway.service` to use editable venv (one-time per snapshot baseline)
+### 7. DO NOT touch `hermes-gateway.service` — keep prod parity
 
-The unit inherited from prod points at `/home/ubuntu/hermes-venv/...` — the orphan venv (`[[hermes-venv-mismatch]]`). Staging is the safe testbed for fixing it; the fix promotes to prod via the staging-promotion flow (Phase 5).
+The unit inherited from prod uses `/home/ubuntu/hermes-venv/...`. The `[[hermes-venv-mismatch]]` memory called this "the wrong venv," but on prod that's the venv the gateway *actually runs from* — and prod works.
 
-```bash
-sudo -iu ubuntu cp /home/ubuntu/.config/systemd/user/hermes-gateway.service \
-                  /home/ubuntu/.config/systemd/user/hermes-gateway.service.pre-staging.bak
-sudo -iu ubuntu tee /home/ubuntu/.config/systemd/user/hermes-gateway.service > /dev/null <<'EOF'
-[Unit]
-Description=Hermes Agent Gateway - Messaging Platform Integration
-After=network-online.target
-Wants=network-online.target
-StartLimitIntervalSec=0
+During the first build I switched it to `/home/ubuntu/.hermes/hermes-agent/venv/...` (the editable install). NetSuite calls then failed with `gateway_unreachable` even though the gateway process was active. Reverting to `hermes-venv` made NetSuite work again. Hypothesis: prod's NetSuite plugin chain depends on packages installed in `hermes-venv`, not the editable install. Spec D1 says staging must be a true copy of prod — don't try to "fix" the venv on staging.
 
-[Service]
-Type=simple
-ExecStart=/home/ubuntu/.hermes/hermes-agent/venv/bin/python -m hermes_cli.main gateway run --replace
-WorkingDirectory=/home/ubuntu/.hermes/hermes-agent
-Environment="PATH=/home/ubuntu/.hermes/hermes-agent/venv/bin:/usr/bin:/home/ubuntu/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-Environment="VIRTUAL_ENV=/home/ubuntu/.hermes/hermes-agent/venv"
-Environment="HERMES_HOME=/home/ubuntu/.hermes"
-Restart=always
-RestartSec=5
-RestartMaxDelaySec=300
-RestartSteps=5
-RestartForceExitStatus=75
-KillMode=mixed
-KillSignal=SIGTERM
-ExecReload=/bin/kill -USR1 $MAINPID
-TimeoutStopSec=210
-StandardOutput=journal
-StandardError=journal
+If `[[hermes-venv-mismatch]]` ever gets fixed, do it on prod first via a feature branch + the staging-promotion flow, never as a staging-only divergence.
 
-[Install]
-WantedBy=default.target
-EOF
-sudo -iu ubuntu systemctl --user daemon-reload
-```
+**Action: leave the unit file alone.** Don't run any edits. Skip to §8.
 
 ### 8. Install `hermes-dashboard.service` (binds directly to tailnet IP)
 
@@ -292,13 +293,14 @@ curl -sSI https://finny.staging.11mirror.com/mcp | grep -iE 'www-authenticate|ht
 | §3 — fresh MCP OAuth | ✅ | Generated on box; Secrets Manager skipped (TODO v2) |
 | §4 — fix prod-host references | ✅ | `MCP_ALLOWED_HOSTS` + `MCP_ISSUER_URL` both staging |
 | §5 — Caddyfile two-block | ✅ | Validated; bcrypt basic_auth on tailnet :9445 |
-| §6 — Hermes profile | ✅ | `staging` profile created, Slack scrubbed, ◆ confirmed |
-| §7 — fix gateway venv | ✅ | Now uses editable venv (`…/hermes-agent/venv`) |
+| §6 — Hermes profile | ✅ | `staging` profile created, Slack scrubbed, NetSuite/Hindsight/GitHub creds copied from global ~/.hermes/.env (gotcha: profile dir's .env is loaded instead of global), ◆ confirmed |
+| §7 — DO NOT touch gateway venv | ✅ reverted | First build switched to editable venv → broke NetSuite. Reverted to prod's `hermes-venv`. Lesson: stay parity-faithful. |
 | §8 — install dashboard service | ✅ | Binds 127.0.0.1:9119, runs from editable venv |
 | §9 — restart units | ✅ | All 4 active |
 | Phase 3 (auto) — listeners + TLS + OAuth metadata + MCP 401 | ✅ | All green |
 | Phase 3 (manual) — desktop app remote backend connection | ✅ | "Connected to http://100.112.31.24:9119 · Hermes 0.14.0" — but chat runs locally per §8a |
 | Phase 3 (manual) — Caddyfile path filter caused OAuth fail | ✅ fixed | Original /mcp+/well-known filter swallowed /register etc. as empty 200; corrected to single proxy block matching prod |
 | Phase 3 (manual) — Claude.ai connector OAuth (PRODUCTION PATH) | ✅ | Added with Advanced→OAuth Client ID/Secret (DCR not advertised; static creds bypass /register requirement). Connected. |
-| Phase 3 (manual) — 5-tool MCP smoke | ⏳ | User to invoke at least finny_query in a Claude.ai chat |
+| Phase 3 (manual) — finny_query smoke (NetSuite reachable) | ✅ | After §7 venv revert + §6 credential copy, finny_query returns real NetSuite data through the staging bridge → gateway → NetSuite path |
+| Phase 3 (manual) — remaining 4 tools smoke | ⏳ | finny_report / finny_task_status / finny_continue / finny_remember not yet exercised, but the bridge → gateway path is proven by finny_query. Optional. |
 | Phase 3 (manual) — no-Slack-bleed | ⏳ | User verifies prod Slack has no bot messages during test window |
