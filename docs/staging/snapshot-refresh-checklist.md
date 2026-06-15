@@ -101,21 +101,13 @@ sudo grep -c 'finny.prod.11mirror.com' /opt/finny/bridge/.env  # expect 0
 sudo grep -c 'finny.staging.11mirror.com' /opt/finny/bridge/.env  # expect ≥2 (MCP_ISSUER_URL + MCP_ALLOWED_HOSTS)
 ```
 
-### 5. Caddyfile — two site blocks: public MCP + tailnet dashboard with basic_auth
+### 5. Caddyfile — single site block (public MCP only)
 
-**Generate the bcrypt hash on user's Mac** (TTY input, no echo, plaintext stays local):
-
-```bash
-docker run --rm -it caddy:2 caddy hash-password
-# (or `caddy hash-password` if installed locally)
-```
-
-Paste the resulting `$2a$14$…` hash into the Caddyfile below. **Caddyfile syntax requires escaping `$` as `$$`.**
+The dashboard does NOT go through Caddy — it binds directly to the tailnet IP (see §8). Why: Hermes v0.14 has a Host-header DNS-rebinding guard that rejects requests with a Host different from `--host`. With Caddy reverse-proxying 100.112.31.24 → 127.0.0.1, Hermes saw `Host: 100.112.31.24` ≠ bound host `127.0.0.1` and 4xx'd everything. Cleaner: bind Hermes directly to the tailnet IP.
 
 ```bash
-HASH_ESC='<the-hash-with-each-$-doubled-to-$$>'  # e.g. $$2a$$14$$LCucAyUSnVAF...
 sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.pre-staging.bak
-sudo tee /etc/caddy/Caddyfile > /dev/null <<EOF
+sudo tee /etc/caddy/Caddyfile > /dev/null <<'EOF'
 finny.staging.11mirror.com {
     encode gzip
     reverse_proxy /mcp* 127.0.0.1:3000 {
@@ -129,23 +121,20 @@ finny.staging.11mirror.com {
         header_up X-Forwarded-Proto https
     }
 }
-
-http://100.112.31.24:9445 {
-    basic_auth {
-        finny-staging $HASH_ESC
-    }
-    reverse_proxy 127.0.0.1:9119 {
-        header_up Host {host}
-    }
-}
 EOF
 sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 sudo systemctl reload caddy   # auto-issues TLS cert on first request
 ```
 
-The dashboard listener binds to the **tailnet IP** (not 0.0.0.0), so port 9445 is unreachable from the public internet regardless of SG. SG keeps its existing 80+443 ingress.
+(If running through SSM where heredoc quoting is tricky, base64-encode and pipe: `echo $B64 | base64 -d | sudo tee /etc/caddy/Caddyfile`.)
 
-(If running this through SSM where heredoc quoting is tricky, base64-encode the content and pipe `echo $B64 | base64 -d | sudo tee /etc/caddy/Caddyfile`.)
+**Auth note:** Hermes v0.14 has no native dashboard auth — the desktop app uses an ephemeral session token (regenerated each dashboard restart) injected into the SPA HTML at `window.__HERMES_SESSION_TOKEN__`. Tailscale is the trust boundary. To get the token, fetch the SPA from any tailnet device:
+
+```bash
+curl -s http://100.112.31.24:9119/ | grep -o '__HERMES_SESSION_TOKEN__="[^"]*"' | sed 's/.*="\([^"]*\)"/\1/'
+```
+
+Paste into desktop app's "Session token" field. **Token rotates on every dashboard restart** — you'll re-paste after refresh / reboot / unit restart. This is a v0.14 limitation; newer Hermes versions add `HERMES_DASHBOARD_BASIC_AUTH_*` env vars (and a Sign-in button in the desktop app). Captured as a TODO when Hermes is upgraded via the staging-promotion flow.
 
 ### 6. Hermes profile: clone `finny` → `staging`, scrub Slack, switch active
 
@@ -198,7 +187,7 @@ EOF
 sudo -iu ubuntu systemctl --user daemon-reload
 ```
 
-### 8. Install `hermes-dashboard.service` (binds to 127.0.0.1, Caddy fronts it)
+### 8. Install `hermes-dashboard.service` (binds directly to tailnet IP)
 
 ```bash
 sudo -iu ubuntu tee /home/ubuntu/.config/systemd/user/hermes-dashboard.service > /dev/null <<'EOF'
@@ -213,7 +202,7 @@ EnvironmentFile=%h/.hermes/.env
 WorkingDirectory=/home/ubuntu/.hermes/hermes-agent
 Environment="VIRTUAL_ENV=/home/ubuntu/.hermes/hermes-agent/venv"
 Environment="HERMES_HOME=/home/ubuntu/.hermes"
-ExecStart=/home/ubuntu/.hermes/hermes-agent/venv/bin/hermes dashboard --no-open --host 127.0.0.1 --port 9119 --skip-build
+ExecStart=/home/ubuntu/.hermes/hermes-agent/venv/bin/hermes dashboard --no-open --insecure --host 100.112.31.24 --port 9119 --skip-build
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -226,7 +215,17 @@ sudo -iu ubuntu systemctl --user daemon-reload
 sudo -iu ubuntu systemctl --user enable hermes-dashboard
 ```
 
-`--skip-build` avoids `npm run build` at startup (the dist is already built in the editable install). Loopback bind keeps Hermes' own CORS/host-guard happy; Caddy provides the auth + tailnet exposure.
+Flag notes:
+- `--insecure` is required to bind to non-localhost (Hermes prints a warning otherwise; tailnet is the trust boundary per D6).
+- `--host 100.112.31.24` (the staging tailnet IP). On refresh, this value changes if Tailscale assigns a different IP — re-derive from `tailscale ip -4` and update.
+- `--skip-build` avoids `npm run build` at startup (the dist is already built in the editable install).
+- The earlier draft of this checklist had Hermes binding to 127.0.0.1 with Caddy reverse-proxying. That doesn't work in v0.14: Hermes' Host-header DNS-rebinding guard rejects requests where `Host:` ≠ bind host. Direct tailnet bind avoids the issue.
+
+### 8a. (v0.14 limitation, captured for awareness) Desktop app remote-chat is stub-only
+
+Even though the desktop app's Settings → Gateway shows "Connected to http://100.112.31.24:9119 · Hermes 0.14.0", the agent **always runs locally** on the user's Mac in this version. The "Remote gateway" toggle observes/controls the remote dashboard process but does NOT route the chat agent loop through the remote box. This is fine for our purposes — the **production traffic path is via the bridge/MCP, not the dashboard chat tab.**
+
+When Hermes is upgraded to a newer version (one with `HERMES_DASHBOARD_BASIC_AUTH_*` and full remote-chat-tab support per the public docs), revisit this.
 
 ### 9. Restart units in order
 
@@ -295,7 +294,7 @@ curl -sSI https://finny.staging.11mirror.com/mcp | grep -iE 'www-authenticate|ht
 | §7 — fix gateway venv | ✅ | Now uses editable venv (`…/hermes-agent/venv`) |
 | §8 — install dashboard service | ✅ | Binds 127.0.0.1:9119, runs from editable venv |
 | §9 — restart units | ✅ | All 4 active |
-| Phase 3 (auto) — listeners + auth gate + TLS + OAuth metadata + MCP 401 | ✅ | All green |
-| Phase 3 (manual) — desktop app config | ⏳ | User to add `http://100.112.31.24:9445` as remote gateway |
-| Phase 3 (manual) — 5-tool browser smoke | ⏳ | User to register Custom Connector + run tools |
-| Phase 3 (manual) — no-Slack-bleed | ⏳ | User to verify during test window |
+| Phase 3 (auto) — listeners + TLS + OAuth metadata + MCP 401 | ✅ | All green |
+| Phase 3 (manual) — desktop app remote backend connection | ✅ | "Connected to http://100.112.31.24:9119 · Hermes 0.14.0" — but chat runs locally per §8a |
+| Phase 3 (manual) — 5-tool browser smoke (PRODUCTION PATH) | ⏳ | User registers Custom Connector at https://finny.staging.11mirror.com/mcp + runs all 5 tools |
+| Phase 3 (manual) — no-Slack-bleed | ⏳ | User verifies prod Slack has no bot messages during test window |
