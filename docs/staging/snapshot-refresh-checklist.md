@@ -101,7 +101,9 @@ sudo grep -c 'finny.prod.11mirror.com' /opt/finny/bridge/.env  # expect 0
 sudo grep -c 'finny.staging.11mirror.com' /opt/finny/bridge/.env  # expect ≥2 (MCP_ISSUER_URL + MCP_ALLOWED_HOSTS)
 ```
 
-### 5. Caddyfile — single site block (public MCP only)
+### 5. Caddyfile — single site block, no path filter
+
+**Match prod's shape exactly: proxy everything to the bridge.** The bridge's OAuth router serves `/authorize`, `/token`, `/revoke`, `/register` (when DCR enabled) and `/.well-known/oauth-*` plus `/mcp*`. Filtering paths in Caddy will silently break OAuth — Caddy will return empty 200s for unfiltered paths, the bridge never sees them, and Claude.ai's OAuth dance fails with cryptic errors like `registration_endpoint_missing`.
 
 The dashboard does NOT go through Caddy — it binds directly to the tailnet IP (see §8). Why: Hermes v0.14 has a Host-header DNS-rebinding guard that rejects requests with a Host different from `--host`. With Caddy reverse-proxying 100.112.31.24 → 127.0.0.1, Hermes saw `Host: 100.112.31.24` ≠ bound host `127.0.0.1` and 4xx'd everything. Cleaner: bind Hermes directly to the tailnet IP.
 
@@ -110,12 +112,7 @@ sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.pre-staging.bak
 sudo tee /etc/caddy/Caddyfile > /dev/null <<'EOF'
 finny.staging.11mirror.com {
     encode gzip
-    reverse_proxy /mcp* 127.0.0.1:3000 {
-        header_up Host {host}
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-Proto https
-    }
-    reverse_proxy /.well-known/* 127.0.0.1:3000 {
+    reverse_proxy 127.0.0.1:3000 {
         header_up Host {host}
         header_up X-Real-IP {remote_host}
         header_up X-Forwarded-Proto https
@@ -262,8 +259,13 @@ curl -sSI https://finny.staging.11mirror.com/mcp | grep -iE 'www-authenticate|ht
 
 ### Manual (user)
 
-- **Desktop app remote backend** — Settings → Gateway → "Add remote gateway" → URL `http://100.112.31.24:9445` → username `finny-staging` → password (the one you bcrypt-hashed). Confirm dashboard chat works against staging.
-- **Browser cowork** (Claude.ai) — register Custom Connector at `https://finny.staging.11mirror.com/mcp` → complete OAuth → exercise all 5 MCP tools (`finny_query`, `finny_report`, `finny_task_status`, `finny_continue`, `finny_remember`).
+- **Desktop app remote backend** — Settings → Gateway → Remote → URL `http://100.112.31.24:9119` → paste session token (fetched from `curl -s http://100.112.31.24:9119/ | grep -o '__HERMES_SESSION_TOKEN__="[^"]*"' | sed 's/.*="\([^"]*\)"/\1/'`) → Save and reconnect. Settings page should show `Connected to http://100.112.31.24:9119 · Hermes 0.14.0`. Note: v0.14 desktop chat **always runs locally** even with remote gateway set — see §8a.
+- **Browser cowork (Claude.ai) — production traffic path** — Settings → Connectors → Add custom connector → "BETA" dialog:
+  - Name: `Finny Staging`
+  - Remote MCP server URL: `https://finny.staging.11mirror.com/mcp`
+  - **Advanced settings → OAuth Client ID and OAuth Client Secret** are mandatory: paste the values from `/opt/finny/bridge/.env` on staging (`MCP_CLIENT_ID` and `MCP_CLIENT_SECRET`). Without these, Claude.ai fails OAuth with `registration_endpoint_missing` because the bridge does not advertise `/register` (RFC 7591 DCR is opt-in via `MCP_DANGEROUSLY_ALLOW_DCR=true`, not enabled in default deploys).
+  - To get the values without leaking through transcript: `aws ssm start-session --target i-0c2c974ff571162eb` then `sudo grep -E '^MCP_CLIENT_ID|^MCP_CLIENT_SECRET' /opt/finny/bridge/.env` then `exit`.
+  - After Add: Claude.ai shows "Connected" with 5 tools. Exercise at least one (`finny_query` for a read-only NetSuite query) to confirm bridge → gateway → NetSuite path.
 - **No-Slack-bleed sanity check** — search prod Slack channels during the staging test window. Expect zero new bot messages tied to staging activity. If any appear, profile switch in §6 didn't take.
 
 ## Cost notes
@@ -296,5 +298,7 @@ curl -sSI https://finny.staging.11mirror.com/mcp | grep -iE 'www-authenticate|ht
 | §9 — restart units | ✅ | All 4 active |
 | Phase 3 (auto) — listeners + TLS + OAuth metadata + MCP 401 | ✅ | All green |
 | Phase 3 (manual) — desktop app remote backend connection | ✅ | "Connected to http://100.112.31.24:9119 · Hermes 0.14.0" — but chat runs locally per §8a |
-| Phase 3 (manual) — 5-tool browser smoke (PRODUCTION PATH) | ⏳ | User registers Custom Connector at https://finny.staging.11mirror.com/mcp + runs all 5 tools |
+| Phase 3 (manual) — Caddyfile path filter caused OAuth fail | ✅ fixed | Original /mcp+/well-known filter swallowed /register etc. as empty 200; corrected to single proxy block matching prod |
+| Phase 3 (manual) — Claude.ai connector OAuth (PRODUCTION PATH) | ✅ | Added with Advanced→OAuth Client ID/Secret (DCR not advertised; static creds bypass /register requirement). Connected. |
+| Phase 3 (manual) — 5-tool MCP smoke | ⏳ | User to invoke at least finny_query in a Claude.ai chat |
 | Phase 3 (manual) — no-Slack-bleed | ⏳ | User verifies prod Slack has no bot messages during test window |
