@@ -152,7 +152,7 @@ describe('HermesAuthProvider', () => {
     expect(tokens.access_token).toBeTruthy();
     expect(tokens.refresh_token).toBeTruthy();
     expect(tokens.token_type).toBe('bearer');
-    expect(tokens.expires_in).toBe(3600);
+    expect(tokens.expires_in).toBe(10 * 365 * 24 * 60 * 60); // 10 years per TOKEN_TTL_MS
 
     // Verify
     const authInfo = await provider.verifyAccessToken(tokens.access_token);
