@@ -10,13 +10,16 @@ All EC2 work via SSM. Wrap git ops in `sudo -iu ubuntu bash -lc "..."`.
 
 ## Per-repo overview
 
-| Repo | Path on prod | Current prod HEAD (SHA / branch) | Initial `deployed` points at |
-|---|---|---|---|
-| `finny-claude-plugin` | `/opt/finny` | `a40d868` on `main` | `a40d868` (= origin/main tip) |
-| `finny-hermes-config` | `~/.hermes` | `1630537` on `feat/atomic-fetch-phase-2` | `1630537` (the feature-branch tip — NOT main) |
-| `finny-hermes` | `~/.hermes/hermes-agent` | `c3bdb2a` on `main` | `c3bdb2a` (= origin/main tip) |
+| Repo | Path on prod | Current prod HEAD (SHA / branch) | Origin/main tip | Initial `deployed` points at |
+|---|---|---|---|---|
+| `finny-claude-plugin` | `/opt/finny` | `a40d868` on `main` | `7b46029` (3 commits ahead: auth/zitadel migration WIP) | **`a40d868`** (NOT main tip) |
+| `finny-hermes-config` | `~/.hermes` | `1630537` on `feat/atomic-fetch-phase-2` | `575e260` (phase-1/phase-2 not in main) | **`1630537`** (feature-branch tip, NOT main) |
+| `finny-hermes` | `~/.hermes/hermes-agent` | `c3bdb2a` on `main` | `c3bdb2a` | `c3bdb2a` (= origin/main tip) |
 
-The asymmetry on `finny-hermes-config` is the whole point: prod is running phase-2's code, and `deployed` must reflect what's running, not what main currently says.
+**Two repos have drift between main and prod, not just one.** The asymmetry is the whole point of this model: `deployed` must reflect what's running, not what main currently says. After PR1, `git log deployed..main` per repo will show the pending-deploy queue:
+- `finny-claude-plugin`: 3 auth commits (zitadel migration) pending deploy
+- `finny-hermes-config`: phase-1 + phase-2 atomic-fetch commits pending reconciliation (PR3+4)
+- `finny-hermes`: empty (deployed == main)
 
 ---
 
@@ -29,11 +32,12 @@ For each repo, on a workstation with push access:
 ```bash
 cd /path/to/finny-claude-plugin
 git fetch origin
-git checkout main
-git rev-parse HEAD                              # confirm == a40d868 (or whatever prod actually shows at runtime)
-git branch deployed
+# Branch deployed at the prod-running SHA — this is NOT origin/main's tip:
+git branch deployed a40d868                     # confirm SHA against prod via SSM first
 git push origin deployed
 ```
+
+**Verify before pushing**: SSH/SSM to prod and `cd /opt/finny && git rev-parse HEAD`. Must equal `a40d868` (or whatever the operator confirms at runtime). Origin/main is ahead with auth/zitadel WIP — those are pending deploy, not running.
 
 ### finny-hermes-config
 
@@ -210,10 +214,12 @@ Append to `docs/staging/deploy-log.md`:
 
 ```
 ## YYYY-MM-DD HH:MM TZ — <operator> (one-time deployed-branch setup)
-- finny-claude-plugin: a40d868 (was on main, now on deployed)
-- finny-hermes-config: 1630537 (was on feat/atomic-fetch-phase-2, now on deployed)
-- finny-hermes: c3bdb2a (was on main, now on deployed)
-- All byte-equality invariants verified.
+- finny-claude-plugin: a40d868 (was on main, now on deployed; main tip is 7b46029, 3 commits ahead — pending deploy of auth/zitadel WIP)
+- finny-hermes-config: 1630537 (was on feat/atomic-fetch-phase-2, now on deployed; main tip is 575e260, lacks phase-1/phase-2)
+- finny-hermes: c3bdb2a (was on main, now on deployed; deployed == main, no drift)
+- /opt/finny: strict invariant verified.
+- ~/.hermes: baseline-delta invariant verified (porcelain before/after diff empty).
+- ~/.hermes/hermes-agent: baseline-delta invariant verified (web/package-lock.json was the only modified file pre-checkout).
 - No restart, no build.
 - Smoke: green.
 ```
@@ -229,6 +235,10 @@ Append to `docs/staging/deploy-log.md`:
 
 ## What's still divergent after setup
 
-- `finny-hermes-config`'s `deployed` branch points at `1630537`, while `main` is behind it. This is correct — main genuinely doesn't have phase-1 or phase-2 yet. PR3+4 fixes this by merging phase-2's commits into main. After that merge, `git log deployed..main` shows the merge commit (or the rebased commits) and the next deploy will FF deployed → main, picking those commits up.
+- `finny-claude-plugin`: `deployed` at `a40d868`; `main` at `7b46029` (3 auth/zitadel commits ahead). These are pending deploy — they were merged to main but never deployed to prod. The next routine deploy via the runbook will FF `deployed` → `main` and ship them.
+- `finny-hermes-config`: `deployed` at `1630537` (feat/atomic-fetch-phase-2 tip); `main` is behind at `575e260` because phase-1/phase-2 were never merged. PR3+4 fixes this by merging phase-2's commits into main (rebase-and-merge). After that, `git log deployed..main` shows the rebased commits and the next deploy is a byte-equality reconciliation deploy (per `deploy-runbook.md`).
+- `finny-hermes`: no drift — `deployed` == `main` == `c3bdb2a`.
 
-This drift is **the documented divergence** the user wanted to acknowledge. It will be closed by PR3+4's reconciliation, not by touching prod.
+These drifts are **the documented divergences** the user wanted to acknowledge. They will be closed by:
+- finny-claude-plugin: a routine deploy of the 3 pending main commits (operator decision when ready).
+- finny-hermes-config: PR3+4's byte-equality reconciliation, not by touching prod.

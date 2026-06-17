@@ -25,15 +25,29 @@ Captured during the staging audit. Re-snapshot before reconciliation — this li
 | `skills/<various>/SKILL.md` | edits across several skills | Each skill needs case-by-case review |
 | `skills/<...>/resolver.md` | +309 lines | Substantial in-place authoring |
 
-### Untracked files (suspected)
+### Untracked files (audit captured 2026-06-17 on staging EC2 i-0c2c974ff571162eb)
 
-- Cron output / log files
-- `profiles/staging/` (created by snapshot-refresh)
-- `venv/` (Python virtualenv, must stay gitignored)
-- `MEMORY.md.bak.*` (timestamped backups created by Hermes)
-- `day_dream` synthesis artifacts (per-run; PR1 gitignores these)
+Hot/runtime:
+- `.channel_directory_5o4t5h8i.tmp` (Hermes channel state)
+- `.clean_shutdown` (gateway shutdown marker)
+- `active_profile` (Hermes profile pointer)
+- `cron.db` (Hermes cron persistence)
+- `cron/output/<hash>/<date>.md` (cron run outputs, dozens of files)
 
-Re-run `git status --porcelain` on prod via SSM before the reconciliation PR — the list above is a snapshot, not authoritative.
+Backups/artifacts:
+- `memories/MEMORY.md.bak.<unix-ts>` (multiple Hermes-generated backups)
+- `skills/.curator_backups/<iso-ts>/` (skill curator backup directories)
+- `skills/finny-brain-ops/references/day_dream_synthesis_<date>.md` (per-run synthesis output — gitignored by follow-up PR)
+
+Profile-specific (created by snapshot-refresh):
+- `profiles/staging/` (entire dir — credentials copied from global env per the staging-profile-env-quirk gotcha)
+
+Test/build artifacts (likely staging-only, may not exist on prod):
+- `skills/netsuite-suiteql/scripts/atomic_fetch.py.backup` (stale dev backup file)
+- `skills/netsuite-suiteql/references/itc-computation-logic.md` (untracked authoring on staging)
+- `skills/netsuite-suiteql/venv/lib/python3.11/site-packages/_pytest/`, `iniconfig*/`, `packaging*/`, `pluggy*/`, `pygments*/`, `pytest*/`, `py.py` (pytest installed into the netsuite-suiteql venv at some point — testing artifact)
+
+Re-run `git status --porcelain` on **prod** via SSM before the reconciliation PR — staging may differ from prod. The list above is a 2026-06-17 staging snapshot.
 
 ---
 
