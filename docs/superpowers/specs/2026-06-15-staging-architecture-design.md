@@ -454,3 +454,112 @@ Internal infra. No new artifact shipped to users.
 
 **UNRESOLVED:** 0 — all open questions answered through brainstorming (D1–D9).
 **VERDICT:** ENG CLEARED — ready to update plan and implement.
+
+---
+
+## Build addendum (2026-06-16)
+
+This section captures what the spec got wrong or under-specified, discovered during the Phase 1–3 build (commits `49f0614`…`7f4e0ec` on `worktree-staging-architecture-plan`). The addendum is appended rather than retconned into D1–D10 so future readers can see the design intent vs. the build reality. The corrections are authoritative — if a Phase 4+ doc and the original D1–D10 conflict, the addendum wins.
+
+### Drift corrections (overrides to original D1–D10)
+
+**A1. DNS naming.**
+Spec: `staging.finny.11mirror.com`. Reality: **`finny.staging.11mirror.com`**, in Route53 zone `staging.11mirror.com`. Mirrors the prod shape `finny.prod.11mirror.com`. All references in operator docs and the bridge env use the corrected form.
+
+**A2. Hermes editable venv path.**
+Spec: `~/.hermes/hermes-agent/.venv/...` (with leading dot). Reality: `~/.hermes/hermes-agent/venv/...` (no dot). Affects `hermes-dashboard.service` `ExecStart`.
+
+**A3. Profile to clone.**
+Spec said copy `default.yaml`. Reality: prod profiles dir contains a `finny/` directory (not a flat `default.yaml`). Correct move: `cp -r ~/.hermes/profiles/finny ~/.hermes/profiles/staging`, then `hermes profile use staging`.
+
+### D11. Dashboard auth model — Hermes v0.14 has no native basic-auth env vars
+
+The spec's D6 cited `HERMES_DASHBOARD_BASIC_AUTH_USERNAME` / `_PASSWORD_HASH` / `_SECRET` per the public Nous docs (https://hermes-agent.nousresearch.com/docs/user-guide/desktop). **Those env vars do not exist in `hermes-agent v0.14.0`** — they're future / docs-ahead-of-shipped-code. Source check: `hermes_cli/web_server.py:80-130` shows an ephemeral session token regenerated each dashboard restart, injected into the SPA HTML at `window.__HERMES_SESSION_TOKEN__`, with CORS restricted to localhost.
+
+Implication: the dashboard cannot be auth-gated by Hermes in v0.14. **Tailscale becomes the trust boundary.** D6 stands in spirit (dashboard is tailnet-only), but the implementation differs:
+
+- Dashboard binds **directly** to the tailnet IP (`100.112.31.24:9119`), not to localhost behind a Caddy reverse proxy with `basic_auth`.
+- Session token is fetched from any tailnet device by `curl`-ing the SPA HTML and grepping out the token; pasted into the desktop app. Token rotates on every dashboard restart (refresh / reboot / `systemctl restart`).
+- When Hermes ships a version with native dashboard basic-auth env vars, revisit D6 properly via the staging-promotion flow (it'll be a manifested non-git change touching `~/.hermes/.env`).
+
+Why direct tailnet bind, not Caddy in front: Hermes v0.14 has a Host-header DNS-rebinding guard. With Caddy reverse-proxying `100.112.31.24` → `127.0.0.1`, Hermes sees `Host: 100.112.31.24` ≠ bound host `127.0.0.1` and 4xx's everything. Binding Hermes to the tailnet IP directly avoids the guard.
+
+### D12. Caddy must be a single transparent reverse-proxy block — no path filtering
+
+The spec's D11 said Caddy mirrors prod's Caddyfile shape. The build-time correction is sharper: **Caddy MUST proxy the entire site to the bridge.** Path-filtering routes (`/mcp*`, `/.well-known/oauth-*`) silently break OAuth — Caddy returns empty 200s for unfiltered paths, the bridge never sees `/register` / `/authorize` / `/token`, and Claude.ai's OAuth dance fails with `oauth_error=registration_endpoint_missing`.
+
+Working Caddyfile shape (verified at `fd1ac78`):
+
+```
+finny.staging.11mirror.com {
+    encode gzip
+    reverse_proxy 127.0.0.1:3000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-Proto https
+    }
+}
+```
+
+The bridge's OAuth router internally serves `/authorize`, `/token`, `/revoke`, `/register` (when DCR is enabled), `/.well-known/oauth-*`, and `/mcp*`. Trust the bridge's router; don't second-guess it in Caddy.
+
+### D13. Claude.ai Custom Connector setup needs OAuth credentials in "Advanced settings"
+
+The Claude.ai Custom Connector dialog has a collapsed **Advanced settings** section with `OAuth Client ID` and `OAuth Client Secret` fields that *look* optional but **are effectively required for any bridge that doesn't advertise `/register`**. The bridge's RFC 7591 Dynamic Client Registration is intentionally OFF in production deploys (`MCP_DANGEROUSLY_ALLOW_DCR` is not set). Without DCR, Claude.ai cannot self-register a client; the user must paste the bridge's static `MCP_CLIENT_ID` / `MCP_CLIENT_SECRET` into the Advanced settings.
+
+Symptom of missing credentials: `oauth_error=registration_endpoint_missing` on connector setup.
+
+Operator procedure for getting the credentials without leaking through transcript:
+```bash
+aws ssm start-session --target i-0c2c974ff571162eb
+sudo grep -E '^MCP_CLIENT_ID|^MCP_CLIENT_SECRET' /opt/finny/bridge/.env
+exit
+```
+
+### D14. Hermes profile-env gotcha — non-default profile loads only profile-dir env
+
+When a non-default Hermes profile is active, the gateway loads env from `~/.hermes/profiles/<name>/.env` **only**, NOT from the global `~/.hermes/.env`. The profile dir's `.env` only has `API_SERVER_*` keys by default — NetSuite, Hindsight, GitHub credentials live only in the global `.env`.
+
+Result on staging: gateway runs but tools return `gateway_unreachable: NetSuite credentials not configured`. Prod doesn't hit this because prod runs the implicit `default` profile (no profile dir → reads global `.env`). Staging has its own profile dir → must replicate the credential set.
+
+Procedure (idempotent, captured in `docs/staging/snapshot-refresh-checklist.md` §6):
+1. `cp -r ~/.hermes/profiles/finny ~/.hermes/profiles/staging`
+2. Strip Slack from profile `.env` (defensive — usually not present).
+3. Append NetSuite/Hindsight/GitHub keys from global `.env` to profile `.env`.
+4. Dedupe by key.
+5. `chmod 600` the profile `.env`.
+6. `hermes profile use staging`.
+
+### D15. `[[hermes-venv-mismatch]]` reframing — don't "fix" the venv layout on staging
+
+The `[[hermes-venv-mismatch]]` memory framed `/home/ubuntu/hermes-venv/` as "the wrong venv" because `hermes-gateway.service`'s ExecStart points there while the running gateway was thought to use the editable install. Build-time finding: **on prod, the gateway actually runs from `hermes-venv` and that's where the NetSuite plugin chain works.** During the first staging build I switched the unit to `~/.hermes/hermes-agent/venv/...` (the editable install) — NetSuite calls then failed with `gateway_unreachable` even though the gateway process was active. Reverting to `hermes-venv` restored NetSuite.
+
+Hypothesis: prod's NetSuite plugin chain depends on packages installed only in `hermes-venv`, not in the editable install. The editable install is used by the dashboard and CLI, not the gateway service.
+
+D1 says staging must be a true copy of prod. **Don't try to "fix" the venv on staging.** If `[[hermes-venv-mismatch]]` ever gets fixed properly, do it on prod first via a feature branch and the staging-promotion flow (which is exactly the discipline this whole tier exists to enforce), never as a staging-only divergence.
+
+The memory should be updated in a follow-up to reflect that the "wrong" venv is actually the working one — but that's a memory-hygiene task, not a code change.
+
+### D16. Desktop app v0.14 always runs the agent locally
+
+Even with Settings → Gateway → Remote set to `http://100.112.31.24:9119`, the **chat agent loop in the desktop app v0.14 always runs locally on the user's Mac.** The "Remote gateway" toggle observes/controls the remote dashboard process (it can show "Connected to … · Hermes 0.14.0") but does NOT route the chat agent through the remote box.
+
+Implication: the desktop app's chat tab is **not** a faithful test of staging Hermes' chat behavior in v0.14. This is acceptable because **the production traffic path is via the bridge/MCP**, not the dashboard chat tab. Browser Claude cowork → `https://finny.staging.11mirror.com/mcp` exercises the real path; the dashboard is for inspecting agent state and exercising the gateway directly via its API surface.
+
+When Hermes is upgraded to a version with full remote-chat-tab support, revisit. Captured as a TODO.
+
+### Operational TODOs that emerged (not in original spec)
+
+- **AWS Secrets Manager IAM grant.** Instance role `hermes-bedrock-HermesInstanceRole-I8b1EsGCg8Qn` lacks `secretsmanager:CreateSecret` / `GetSecretValue` / `PutSecretValue` on `arn:aws:secretsmanager:*:*:secret:finny/staging/oauth/*`. Phase 2 fell back to writing MCP OAuth secrets directly into `/opt/finny/bridge/.env` (mode 0600 root). Acceptable v1 (low rotation, single instance), fix in v2 by granting the IAM permissions and pulling at unit start.
+- **EBS snapshot cleanup policy.** `snap-0750e633f9a5e1500` (pre-termination old staging) and prod AMI snapshots accumulate ~$1.50/mo each. Add an EventBridge / cron rule to keep only the latest 2.
+- **Stop staging nightly.** Halves t3.small cost from ~$15/mo to ~$8/mo. Deferred — not worth the complexity until cost matters.
+- **Memory hygiene.** Update `[[hermes-venv-mismatch]]` to reflect D15 — `hermes-venv` is the working venv on prod, don't "fix" it.
+- **Hermes upgrade promotion.** When Hermes ships a version with native dashboard basic-auth env vars and full remote-chat-tab support, run the upgrade through the staging-promotion flow and revisit D11 + D16.
+
+### Files this addendum touched (Phase 4)
+
+- `CLAUDE.md` (root) — new "Staging-to-prod promotion" section, replaced staging-tunnel row in local-dev-loops table.
+- `docs/staging/README.md` — long-form operator's guide.
+- `docs/staging/MANIFEST-TEMPLATE.md` — per-branch manifest template.
+- `docs/staging/snapshot-refresh-checklist.md` — already in place from Phase 2 (`49f0614`).
+- Memory: `staging-promotion-discipline.md` (in user's global memory dir, indexed in `MEMORY.md`).
