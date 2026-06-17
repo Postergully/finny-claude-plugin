@@ -20,9 +20,19 @@
 - `finny-hermes-config@<branch>`: `<shas, or "no changes">`
 - `netsuite-kb@<branch>`: `<shas, or "no changes">`
 
+## Deploy decision
+
+> Pick one. The operator running `deploy-runbook.md` reads this section to decide deploy timing.
+
+- [ ] **Deploy immediately after merge** — PR is independent, ship it as soon as merged
+- [ ] **Hold for batch** — safe to merge but wait for the next batched deploy window
+- [ ] **Hotfix** — deploy ASAP, do not batch with anything else
+- [ ] **Reconciliation deploy** — special case (e.g., byte-equality reconciliation); see deploy-runbook.md byte-equality flow
+
 ## Non-git changes (replay manually on prod, in order)
 
-> If empty: write **"No non-git changes — git merge + standard restart is sufficient."**
+> These run during step 9b (deploy), NOT at merge time. Merge to main does not trigger any of these.
+> If empty: write **"No non-git changes — `git pull` on `deployed` + standard restart is sufficient."**
 
 1. `<file or surface>`: `<change>`
    - **Command run:** `<exact command, redact secrets>`

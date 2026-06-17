@@ -37,9 +37,29 @@ If in doubt, staging-test it. Staging is cheap insurance.
    docs/staging/<branch-name>-changes.md, commit to the branch
 7. PR contains: code diff + staging-changes manifest + green smoke
 8. reviewer approves, merge to main                     ← reviewer rejects PRs missing manifest
-9. prod deploy = git pull on prod EC2 + walk the manifest's
-   non-git steps + restart units
+9a. merge != deploy. Main is "ready to deploy"; no prod action
+    triggered by merge.
+9b. deploy = explicit operator decision. See `deploy-runbook.md`:
+    FF `deployed` to main, on prod git pull, walk manifest's non-git
+    steps, restart units. Can batch multiple merged PRs.
 ```
+
+## Deployed-branch model
+
+Prod tracks a protected `deployed` branch on each repo. This separates "code is approved" (merge to main) from "code is running" (FF deployed → main + git pull on prod).
+
+| Branch | Meaning | Who moves it |
+|---|---|---|
+| `main` | Blessed history — reviewed, staging-tested, approved | PR merges |
+| `deployed` | What's running on prod right now | Operator running deploy runbook |
+| feature branches | In-flight work | Author |
+
+Useful invariants:
+- `git log deployed..main` on any repo = "what's pending deploy"
+- Prod's `git rev-parse HEAD` = the deployed SHA (also tagged by the `deployed` branch)
+- Rollback = move `deployed` to previous SHA + redeploy. No `git revert` PR needed.
+
+Setup is one-time per repo: `setup-deployed-branch.md`. Deploys after that: `deploy-runbook.md`.
 
 ---
 
@@ -154,40 +174,19 @@ Never paste env-file values into the manifest, the PR, or any chat transcript. P
 
 ---
 
-## Step 9 — prod deploy
+## Steps 9a / 9b — merge, then deploy (separately)
 
-After merge:
+**9a. Merge to main.** Reviewer approves the PR (which includes the manifest). Main moves to the new tip. Prod is unaffected — `deployed` branch still points at the previous SHA.
 
-```bash
-# Open SSM to prod:
-aws ssm start-session --target i-0ef58962b09d490ee --region us-east-1 \
-  --document-name AWS-StartInteractiveCommand \
-  --parameters 'command=["sudo -iu ubuntu"]'
+**9b. Deploy.** When the operator decides it's deploy time (could be immediately, could be batched with other merges later in the day), they run `deploy-runbook.md`. The runbook:
 
-cd /opt/finny
-git fetch origin
-git pull --ff-only origin main
-pnpm install --frozen-lockfile
-pnpm -C bridge build
-```
+1. FFs `deployed` to `main`'s tip on origin (the per-repo deploy decision)
+2. Opens SSM to prod, `git pull --ff-only` on the `deployed` branch checkout
+3. Walks the manifest's "Non-git changes" section in order
+4. Restarts units
+5. Smokes prod (5-tool MCP smoke + spot-check)
 
-Then walk the manifest's "Non-git changes" section **in order**. Each step should be applied to prod exactly as it was applied to staging.
-
-Restart units:
-
-```bash
-sudo systemctl restart finny-mcp
-sudo -iu ubuntu systemctl --user restart hermes-gateway
-# Do NOT restart hermes-dashboard on prod — prod doesn't run one.
-```
-
-Verify prod still green:
-
-```bash
-curl -sSI https://finny.prod.11mirror.com/mcp | grep -iE 'www-authenticate|http/'
-```
-
-5-tool smoke against prod via your usual cowork connector.
+Multiple merged PRs can ride one deploy — the operator FFs `deployed` to whatever main's tip is at deploy time, and walks each merged PR's manifest in chronological order.
 
 ---
 
@@ -246,6 +245,8 @@ These bit us during the initial Phase 1–3 build. They're documented in the spe
 
 - `README.md` — this file (operator's how-to)
 - `MANIFEST-TEMPLATE.md` — copy this when starting a staging test
+- `deploy-runbook.md` — routine deploy + byte-equality reconciliation deploy + rollback
+- `setup-deployed-branch.md` — one-time setup of `deployed` branches per repo
 - `snapshot-refresh-checklist.md` — full Phase 1+2 build procedure (re-apply on every refresh)
 - `<branch-name>-changes.md` — per-branch manifests (one per PR that staging-tested)
 
