@@ -103,71 +103,99 @@ The original drafting assumed `git status --porcelain` would be empty everywhere
 | `finny-hermes-config` (`~/.hermes`) | **Baseline-delta**: capture porcelain output BEFORE; capture AFTER; assert AFTER ⊆ BEFORE (no new dirt added). Document the BEFORE state as the known baseline. |
 | `finny-hermes` (`~/.hermes/hermes-agent`) | **Strict** if porcelain shows nothing significant; otherwise baseline-delta |
 
-The byte-equality check (`git diff HEAD origin/deployed`) stays unchanged everywhere — that's the actual safety guarantee.
+The commit-equality check (`git diff --quiet HEAD origin/deployed`) is the actual safety guarantee — it ensures `HEAD` and `origin/deployed` point at the same commit before we switch branches, which makes `git checkout deployed` a no-op for tracked files.
 
 ### finny-claude-plugin (strict invariant)
 
+Note on gates: comments on the same line as `&&` swallow the `&&` (the rest of the line becomes a bash comment). All gates below use `--quiet` / `[ -z ... ]` forms that **fail the chain on violation**, and comments live on their own lines.
+
 ```bash
-sudo -iu ubuntu bash -lc "
+sudo -iu ubuntu bash -lc '
   cd /opt/finny &&
   git fetch origin &&
-  git status --porcelain &&                                # must be empty
-  git rev-parse HEAD &&                                    # record current SHA
-  git diff HEAD origin/deployed &&                          # MUST be empty (byte-equality)
+  # gate: working tree clean
+  [ -z "$(git status --porcelain)" ] &&
+  # record current SHA
+  git rev-parse HEAD &&
+  # gate: byte-equality vs origin/deployed (exits non-zero if diff exists)
+  git diff --quiet HEAD origin/deployed &&
   git checkout deployed &&
   git pull --ff-only origin deployed &&
-  git rev-parse HEAD &&                                    # confirm SHA unchanged
-  git status --porcelain                                    # confirm working tree still clean
-"
+  # confirm SHA unchanged
+  git rev-parse HEAD &&
+  # gate: working tree still clean post-checkout
+  [ -z "$(git status --porcelain)" ]
+'
 ```
+
+If any step fails, the script aborts. Re-run with each gate isolated to find which one fired.
 
 ### finny-hermes-config (baseline-delta invariant — the drift case)
 
-Capture baseline first, into a file we'll diff against:
+Capture baseline first, into a file we'll diff against. **Use a per-operator temp path** (`$$` = caller's PID) so concurrent runs don't collide:
 
 ```bash
-sudo -iu ubuntu bash -lc "
+sudo -iu ubuntu bash -lc '
   cd ~/.hermes &&
   git fetch origin &&
-  git status --porcelain | sort > /tmp/.hermes-porcelain.before &&
-  wc -l /tmp/.hermes-porcelain.before &&
-  git rev-parse HEAD &&                                    # should be the deployed-branch-equivalent SHA (e.g. 1630537)
-  git diff HEAD origin/deployed                             # MUST be empty (byte-equality of TRACKED files)
-"
+  # capture baseline porcelain
+  git status --porcelain | sort > /tmp/hermes-porcelain.$$.before &&
+  wc -l /tmp/hermes-porcelain.$$.before &&
+  # should be the deployed-branch-equivalent SHA (e.g. 1630537)
+  git rev-parse HEAD &&
+  # gate: byte-equality of tracked files (fails chain if non-empty)
+  git diff --quiet HEAD origin/deployed
+'
 ```
 
-`git diff HEAD origin/deployed` operates on tracked files only — modified-but-uncommitted edits and untracked files do not affect it. As long as that diff is empty, the *contents* match origin/deployed; the dirt is the same dirt before and after.
+`git diff --quiet HEAD origin/deployed` is a commit-vs-commit comparison — it exits non-zero if `HEAD` and `origin/deployed` point at different commits (or the same commit with different tree hashes, which shouldn't happen). It does NOT inspect the working tree. Working-tree dirt (untracked files, uncommitted edits) is orthogonal: as long as `HEAD` already points at the same commit as `origin/deployed`, `git checkout deployed` is a no-op for tracked files, so working-tree dirt carries across the switch unchanged. The `diff -q` of porcelain `.before`/`.after` confirms that empirically post-switch.
 
 Now switch:
 
 ```bash
-sudo -iu ubuntu bash -lc "
+sudo -iu ubuntu bash -lc '
   cd ~/.hermes &&
-  git checkout deployed &&                                  # warning: 'switching may discard local changes' will fire if any tracked file's content differs from deployed's tip — abort and investigate
+  git checkout deployed &&
   git pull --ff-only origin deployed &&
-  git rev-parse HEAD &&                                    # confirm == pre-checkout SHA
-  git status --porcelain | sort > /tmp/.hermes-porcelain.after &&
-  diff /tmp/.hermes-porcelain.before /tmp/.hermes-porcelain.after
-"
+  # gate: SHA unchanged (deployed and feat/atomic-fetch-phase-2 point at the same commit)
+  [ "$(git rev-parse HEAD)" = "1630537a4822c0b9614d40d28bc81700687d9d84" ] &&
+  git status --porcelain | sort > /tmp/hermes-porcelain.$$.after &&
+  # gate: no new dirt added
+  diff -q /tmp/hermes-porcelain.$$.before /tmp/hermes-porcelain.$$.after
+'
 ```
 
-The final `diff` must be empty — meaning the operation added no new dirt. Pre-existing dirt is the *baseline*; we are explicitly accepting it as known and deferring its reconciliation to a follow-up PR.
-
-**If `git checkout deployed` produces any output other than 'Already on deployed' or 'Switched to branch deployed' — STOP.** In particular, "Your local changes to the following files would be overwritten" means a tracked file in the working tree has been edited and the new branch's version differs. The byte-equality check above should have prevented this; if it didn't, something has changed since. Re-run the byte-equality check, find the divergent file, decide before proceeding.
+If `git checkout deployed` errors with "Your local changes to the following files would be overwritten" — STOP. That means a tracked file's working-tree version differs from the deployed branch's version, which the byte-equality gate above should have caught. Re-run that gate to find the divergent file. Each gate fails the chain and aborts the script — pre-existing dirt is the *baseline*; we are explicitly accepting it as known and deferring its reconciliation to a follow-up PR.
 
 ### finny-hermes (likely strict, but check first)
 
+First, check porcelain so you know which pattern to use:
+
 ```bash
-sudo -iu ubuntu bash -lc "
+sudo -iu ubuntu bash -lc '
   cd ~/.hermes/hermes-agent &&
   git fetch origin &&
-  git status --porcelain &&                                # check what's there
-  git rev-parse HEAD &&
-  git diff HEAD origin/deployed                             # MUST be empty
-"
+  git status --porcelain
+'
 ```
 
-If porcelain is empty: use the strict pattern (same shape as `/opt/finny`). If it shows files (e.g., `web/package-lock.json` per the staging audit), use the baseline-delta pattern (same shape as `~/.hermes`).
+If porcelain is empty: use the strict pattern (same shape as `/opt/finny`). If it shows files (e.g., `web/package-lock.json` per the staging audit), use the baseline-delta pattern (same shape as `~/.hermes`):
+
+```bash
+# Baseline-delta variant, if porcelain showed files:
+sudo -iu ubuntu bash -lc '
+  cd ~/.hermes/hermes-agent &&
+  git fetch origin &&
+  git status --porcelain | sort > /tmp/hermes-agent-porcelain.$$.before &&
+  git rev-parse HEAD &&
+  # gate: byte-equality
+  git diff --quiet HEAD origin/deployed &&
+  git checkout deployed &&
+  git pull --ff-only origin deployed &&
+  git status --porcelain | sort > /tmp/hermes-agent-porcelain.$$.after &&
+  diff -q /tmp/hermes-agent-porcelain.$$.before /tmp/hermes-agent-porcelain.$$.after
+'
+```
 
 ### Why baseline-delta is acceptable here
 

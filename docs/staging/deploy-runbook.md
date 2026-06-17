@@ -55,58 +55,64 @@ aws ssm start-session --target i-0ef58962b09d490ee --region us-east-1 \
 
 ### 3. Pull and build, per repo
 
+Note on gates: comments on the same line as `&&` swallow the trailing `&&` (the rest of the line becomes a bash comment, dropping the chain operator). All gates below use forms that **fail the chain on violation**, with comments on their own lines.
+
 **finny-claude-plugin (`/opt/finny`):**
 
 ```bash
-sudo -iu ubuntu bash -lc "
+sudo -iu ubuntu bash -lc '
   cd /opt/finny &&
   git fetch origin &&
-  git status --porcelain &&                    # must be empty
-  git rev-parse HEAD &&                         # record pre-pull SHA
+  # gate: working tree clean
+  [ -z "$(git status --porcelain)" ] &&
+  # record pre-pull SHA
+  git rev-parse HEAD &&
   git pull --ff-only origin deployed &&
-  git rev-parse HEAD &&                         # record post-pull SHA
+  # record post-pull SHA
+  git rev-parse HEAD &&
   pnpm install --frozen-lockfile &&
   pnpm -C bridge build
-"
+'
 ```
 
 **finny-hermes-config (`~/.hermes`):** uses **baseline-delta** invariant — this repo carries persistent runtime dirt (cron output, MEMORY.md edits, etc.) that's accepted as a known baseline. See `setup-deployed-branch.md` § "Why baseline-delta is acceptable here" for rationale and `known-drift.md` for the inventory.
 
 ```bash
-sudo -iu ubuntu bash -lc "
+sudo -iu ubuntu bash -lc '
   cd ~/.hermes &&
   git fetch origin &&
-  git status --porcelain | sort > /tmp/.hermes-porcelain.before &&
+  # capture porcelain baseline (per-PID temp file avoids collisions on concurrent runs)
+  git status --porcelain | sort > /tmp/hermes-porcelain.$$.before &&
   git rev-parse HEAD &&
-  git diff HEAD origin/deployed                 # MUST be empty (byte-equality of tracked files) &&
   git pull --ff-only origin deployed &&
   git rev-parse HEAD &&
-  git status --porcelain | sort > /tmp/.hermes-porcelain.after &&
-  diff /tmp/.hermes-porcelain.before /tmp/.hermes-porcelain.after   # must be empty (no new dirt added)
-"
+  git status --porcelain | sort > /tmp/hermes-porcelain.$$.after &&
+  # gate: porcelain unchanged (pull added no new tracked-file modifications and no untracked artifacts)
+  diff -q /tmp/hermes-porcelain.$$.before /tmp/hermes-porcelain.$$.after
+'
 # No build step for config repo.
 ```
 
-If `diff` shows new entries: stop and investigate — the pull added files to the working tree that weren't there before, which the byte-equality check should have prevented.
+The porcelain `diff -q` is the safety gate: a routine deploy's `git pull` should advance HEAD without adding files to the working tree. If the pull surfaces a previously-tracked file as modified (e.g., a deployed commit changed a file that prod has been editing in place), the porcelain diff will catch it and abort.
 
-**finny-hermes (`~/.hermes/hermes-agent`):** strict if porcelain is empty; otherwise baseline-delta (see `setup-deployed-branch.md` for the pattern).
+**finny-hermes (`~/.hermes/hermes-agent`):** strict if porcelain is empty; otherwise baseline-delta (see `setup-deployed-branch.md` for the pattern). Below is the baseline-delta variant since the staging audit showed `web/package-lock.json` modified:
 
 ```bash
-sudo -iu ubuntu bash -lc "
+sudo -iu ubuntu bash -lc '
   cd ~/.hermes/hermes-agent &&
   git fetch origin &&
-  git status --porcelain | sort > /tmp/.hermes-agent-porcelain.before &&
+  git status --porcelain | sort > /tmp/hermes-agent-porcelain.$$.before &&
   git rev-parse HEAD &&
-  git diff HEAD origin/deployed                 # MUST be empty &&
   git pull --ff-only origin deployed &&
   git rev-parse HEAD &&
-  git status --porcelain | sort > /tmp/.hermes-agent-porcelain.after &&
-  diff /tmp/.hermes-agent-porcelain.before /tmp/.hermes-agent-porcelain.after &&
+  git status --porcelain | sort > /tmp/hermes-agent-porcelain.$$.after &&
+  # gate: porcelain unchanged
+  diff -q /tmp/hermes-agent-porcelain.$$.before /tmp/hermes-agent-porcelain.$$.after &&
   cd web && npm install && npm run build
-"
+'
 ```
 
-If `git status --porcelain` is non-empty for `/opt/finny` (the strict-invariant repo): stop. The working tree has uncommitted changes that need investigation before we overwrite them. For `~/.hermes` and `~/.hermes/hermes-agent`, the baseline-delta `diff` is the safety check — if that's non-empty, stop.
+If any gate fires across any repo: stop. The chain aborts on first failure; re-run with each gate isolated to find which one fired.
 
 ### 4. Walk each manifest's non-git steps
 
@@ -170,34 +176,48 @@ git push origin deployed
 
 ### 3. Pre-pull invariant check on prod
 
-For `/opt/finny` (strict): `git status --porcelain` must be empty AND `git diff HEAD origin/deployed` must be empty.
-
-For `~/.hermes` and `~/.hermes/hermes-agent` (baseline-delta): capture porcelain to `.before`, run `git diff HEAD origin/deployed` (must be empty — that's the byte-equality proof for tracked files), then proceed. Capture `.after` post-pull and `diff` them.
+For `/opt/finny` (strict): porcelain must be empty AND tree-equality must hold.
 
 ```bash
-sudo -iu ubuntu bash -lc "
-  cd <repo-path> &&
+sudo -iu ubuntu bash -lc '
+  cd /opt/finny &&
   git fetch origin &&
-  git status --porcelain | sort > /tmp/recon-porcelain.before &&
-  git diff HEAD origin/deployed                 # MUST BE EMPTY — byte-equality of tracked files
-"
+  # gate: porcelain empty
+  [ -z "$(git status --porcelain)" ] &&
+  # gate: tree-equality between HEAD and origin/deployed
+  # (different commits, same file content — that is the reconciliation invariant)
+  git diff --quiet HEAD origin/deployed
+'
 ```
 
-If `git diff HEAD origin/deployed` is non-empty: **stop**. The tracked-file content on prod is not byte-identical to what we're switching to. Do not proceed without understanding why. This is the core safeguard for the reconciliation case — working-tree dirt (untracked files, uncommitted edits to ignored paths) is orthogonal to it.
+For `~/.hermes` and `~/.hermes/hermes-agent` (baseline-delta): capture porcelain to a per-PID `.before` file, gate on tree-equality, then proceed. Capture `.after` post-pull and `diff -q` them.
+
+```bash
+sudo -iu ubuntu bash -lc '
+  cd <repo-path> &&
+  git fetch origin &&
+  git status --porcelain | sort > /tmp/recon-porcelain.$$.before &&
+  # gate: tree-equality between HEAD and origin/deployed
+  git diff --quiet HEAD origin/deployed
+'
+```
+
+If the gate fires: **stop**. The tracked-file content on prod is not byte-identical to what we're about to FF to. The reconciliation case requires that prod's working-tree-at-HEAD already matches the new `deployed` tip's content — different commits, same files. If that's not true, this isn't a reconciliation; it's a routine deploy and you're using the wrong flow. Working-tree dirt (untracked files, uncommitted edits to ignored paths) is orthogonal to this gate.
 
 ### 4. Switch checkout and pull
 
 ```bash
-sudo -iu ubuntu bash -lc "
+sudo -iu ubuntu bash -lc '
   cd <repo-path> &&
-  git checkout deployed &&                      # may print 'Already on' or 'Switched to'
-  git pull --ff-only origin deployed &&         # should be no-op if already up-to-date
-  git status --porcelain | sort > /tmp/recon-porcelain.after &&
-  diff /tmp/recon-porcelain.before /tmp/recon-porcelain.after   # must be empty
-"
+  git checkout deployed &&
+  git pull --ff-only origin deployed &&
+  git status --porcelain | sort > /tmp/recon-porcelain.$$.after &&
+  # gate: porcelain unchanged
+  diff -q /tmp/recon-porcelain.$$.before /tmp/recon-porcelain.$$.after
+'
 ```
 
-Working tree is byte-identical for tracked files (per the pre-pull `git diff` check); baseline dirt is unchanged (per the `diff` of porcelain snapshots). **No build, no restart needed.** Verify by checking unit status:
+Working tree is byte-identical for tracked files (per the pre-pull tree-equality gate); baseline dirt is unchanged (per the porcelain `diff -q`). **No build, no restart needed.** Verify by checking unit status:
 
 ```bash
 systemctl status finny-mcp                     # 'active (running)' since whatever pre-deploy timestamp
