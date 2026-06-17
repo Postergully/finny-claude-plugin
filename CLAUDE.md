@@ -102,13 +102,29 @@ Every change that touches non-mocked surfaces (systemd, Caddy, OAuth, env, NetSu
    docs/staging/<branch-name>-changes.md, commit to the branch
 7. PR contains: code diff + staging-changes manifest + green smoke
 8. reviewer approves, merge to main                     ← reviewer rejects PRs missing manifest
-9. prod deploy = git pull on prod EC2 + walk the manifest's
-   non-git steps + restart units
+9a. merge != deploy. Main is the "ready to deploy" pointer;
+    no prod action triggered by merge.
+9b. deploy = explicit operator decision. Run docs/staging/deploy-runbook.md:
+    fast-forward `deployed` branch to main's tip, push, then on prod EC2
+    git pull on `deployed`, walk the manifest's non-git steps, restart units.
+    Can happen minutes, hours, or days after merge — and can batch
+    multiple merged PRs into one deploy.
 ```
 
 ### The hard rule
 
 **No prod deploy without `docs/staging/<branch-name>-changes.md` in the merged branch.** Empty content is fine ("No non-git changes — git merge + standard restart is sufficient.") but the file must exist. Reviewer enforcement is v1; CI gate captured as TODO. Why this rule exists: snapshot-from-prod staging is behind prod the moment prod merges, so non-git changes (env edits, systemd unit changes, `apt install`, Caddyfile edits) silently disappear between "worked on staging" and "deployed to prod" if not captured.
+
+### Deployed-branch model
+
+Prod tracks a protected `deployed` branch on each repo (`finny-claude-plugin`, `finny-hermes-config`, `finny-hermes`), not `main`. This decouples merge from deploy:
+
+- **`main`** = blessed history; what's been reviewed, staging-tested, and approved. Moves on every PR merge.
+- **`deployed`** = what's running in prod *right now*. Moves only when the operator runs the deploy runbook.
+- **`git log deployed..main`** on any repo answers "what's pending deploy?"
+- **Rollback** = revert `deployed` to a previous SHA + redeploy. No `git revert` PR needed.
+
+Setup is one-time per repo (see `docs/staging/setup-deployed-branch.md`). Deploys after that follow `docs/staging/deploy-runbook.md`.
 
 ### Two-listener model
 
