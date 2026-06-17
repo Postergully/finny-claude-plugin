@@ -24,4 +24,4 @@ Append-only record of deploys to prod (`i-0ef58962b09d490ee`). Each entry per th
 
 **Known deferred work**: `~/.hermes` working-tree drift (63 modified/untracked items as of audit time). Inventory in `docs/staging/known-drift.md`. Reconciliation via a follow-up PR.
 
-**Branch protection** on `deployed` branches: not yet applied. Deferred to next operator action.
+**Branch protection** on `deployed` branches: applied 2026-06-17 ~15:50 UTC for all 3 repos via `gh api`. Settings: `required_linear_history=true`, `allow_force_pushes=true` (operator force-push needed for rollback), `allow_deletions=false`. Verified on all 3 origins.
