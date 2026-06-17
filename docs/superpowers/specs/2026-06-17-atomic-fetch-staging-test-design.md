@@ -4,6 +4,15 @@
 **Target:** PR2 of the atomic-fetch reconciliation sequence (PR1 = deployed-branch model, shipped 2026-06-17; PR3+4 = byte-equality reconciliation, blocked on this test).
 **Staging:** EC2 `i-0c2c974ff571162eb`, public MCP `https://finny.staging.11mirror.com/mcp`, code at `/home/ubuntu/.hermes/skills/netsuite-suiteql/` on tip `1630537` (`feat/atomic-fetch-phase-2`, identical to prod).
 
+## Source of truth
+
+No standalone design spec / plan markdown exists in either git tree (`finny-hermes-config` or `netsuite-kb`); the feature was authored as code + tests + SKILL.md. The authoritative surface for this test is therefore:
+
+- `skills/netsuite-suiteql/SKILL.md` v3.0.0 — user-facing API contract for the four primitives.
+- `skills/netsuite-suiteql/scripts/atomic_fetch.py` (407 lines, tip `1630537`) — implementation.
+- `skills/netsuite-suiteql/tests/snapshots/*.json` — 10 blessed snapshot fixtures (`ap_aging_basic`, `approval_status_basic`, `gl_monthly_basic`, `gst_basic`, `open_bills_basic`, `payroll_gl_basic`, `po_status_basic`, `tds_basic`, `vendor_balance_basic`, `vendor_lookup_basic`) — what the original authors blessed as "atomic_fetch should handle these correctly". Phase 2 anchors representative queries to this set rather than to hand-picked guesses.
+- 16 phase-1+2 commits between `575e260` and `1630537` on `feat/atomic-fetch-phase-2` (visible via `git log main..feat/atomic-fetch-phase-2` in `~/.hermes`).
+
 ## Goal
 
 Verify the **search-as-code** claim of atomic_fetch end-to-end: that composing primitives (`catalog`, `schema`, `rules`, `hindsight`) inside `execute_code` pulls the right NetSuite knowledge dynamically and reduces token cost vs. the pre-atomic_fetch path of dumping full skill content. Confirm no regression vs. what's running on prod before promoting phase-1 + phase-2 history into `main` via PR3+4.
@@ -68,7 +77,11 @@ Each prompt entered in browser cowork, one per resolver intent / pattern:
 |---|---|---|---|---|
 | 1 | "list 10 open vendor bills with tranid + foreign unpaid" | `open_bills` | A: catalog → schema → suiteql | rows; no `custbody_*` in SELECT (would zero result); `posting='T'` honored |
 | 2 | "sum TDS posted to GL this quarter, grouped by account" | `gl_summary` + `tds` rule | B: rules.gl_accounts → suiteql aggregate | groups returned; `tal.accountingbook = 1` present in SQL |
-| 3 | "find pending approvals on vendor bills — what was the gotcha last time" | `pending_approvals` | C: hindsight.recall + catalog → suiteql | recall returns cleanly (banks dict); SQL uses `BUILTIN.DF(t.nextapprover)`, not raw `employee` join (a known 403-zero-rows trap) |
+| 3 | "find pending approvals on vendor bills — what was the gotcha last time" | `pending_approvals` | C: hindsight.recall + catalog → suiteql | SQL uses `BUILTIN.DF(t.nextapprover)`, not raw `employee` join (a known 403-zero-rows trap) |
+
+**Query #3 — hindsight composition.** Don't pre-script the `execute_code` block. Run the prompt as-is and observe what the agent composes. If it called `hindsight.recall` on its own initiative → green for Pattern C. If it didn't → run a follow-up probe that explicitly imports and calls `hindsight.recall("pending approvals vendor bills")` and confirms the return shape `{banks, errors}` cleanly. Either outcome is acceptable for PR2; agent-side hindsight best-practices belong to a later iteration. The hard requirement on #3 is the SQL-correctness check (no `employee` join trap).
+
+**Anchoring to blessed fixtures.** Phase 2's three queries map directly to existing snapshot fixtures (`open_bills_basic`, `tds_basic`, `approval_status_basic`) — i.e., the original authors already blessed these intents as in-scope for atomic_fetch. The remaining 7 fixtures (`ap_aging_basic`, `gl_monthly_basic`, `gst_basic`, `payroll_gl_basic`, `po_status_basic`, `vendor_balance_basic`, `vendor_lookup_basic`) are out of scope for PR2 — they're covered by Phase 0 pytest.
 
 For each: capture prompt, envelope `status` + top-level shape, gateway turn count, latency, tool-call list, pass/fail rationale. **No data values in the manifest.**
 
@@ -106,6 +119,10 @@ Manifest at `docs/staging/atomic-fetch-staging-test-changes.md` with sections:
 - Phase 3 shows token cost ≥ pre-feature dump → STOP.
 - Anything destructive on prod — confirm with user before any action.
 
+## PR2 shape
+
+PR-led, not direct-to-main. Branch on `finny-claude-plugin`: `staging-test/atomic-fetch`. PR2 is documentation-only: this spec + the manifest + any small follow-up notes. No code changes. Reviewer's job is to confirm the manifest's verdict matches what the test phases recorded; if green, PR3+4 in `finny-hermes-config` becomes unblocked.
+
 ## Success → next action
 
-If all phases green: write the manifest, commit on a `staging-test/atomic-fetch` branch, open PR2 with the manifest as the artifact. Once PR2 lands, PR3+4 (byte-equality reconciliation per `docs/staging/deploy-runbook.md` §"Byte-equality reconciliation deploy") becomes unblocked.
+If all phases green: write the manifest, commit on `staging-test/atomic-fetch`, open PR2 with the manifest as the artifact. Once PR2 lands, PR3+4 (byte-equality reconciliation per `docs/staging/deploy-runbook.md` §"Byte-equality reconciliation deploy") becomes unblocked.
