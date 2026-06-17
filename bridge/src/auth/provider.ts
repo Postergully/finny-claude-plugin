@@ -205,7 +205,6 @@ export class HermesAuthProvider implements OAuthServerProvider {
         this.refreshTokens.delete(token);
       }
     }
-
   }
 
   /**
