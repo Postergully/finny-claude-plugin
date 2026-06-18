@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OneLogin OIDC Setup — Finny</title>
+  <style>
+    body { max-width: 900px; margin: 0 auto; padding: 40px 20px; font-family: system-ui, -apple-system, sans-serif; line-height: 1.7; color: #1a1a1a; }
+    h1 { border-bottom: 2px solid #333; padding-bottom: 10px; }
+    h2 { margin-top: 2em; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+    h3 { margin-top: 1.5em; }
+    table { width: 100%; border-collapse: collapse; margin: 1em 0; }
+    th, td { border: 1px solid #ddd; padding: 10px 14px; text-align: left; }
+    th { background: #f5f5f5; width: 30%; }
+    code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+    .step { background: #f9f9f9; border-left: 4px solid #333; padding: 12px 16px; margin: 1em 0; }
+    .step-number { font-weight: bold; font-size: 1.1em; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+
+<h1>OneLogin OIDC Setup — Finny</h1>
+
+<h2>Step 1: Create the Application</h2>
+
+<div class="step">
+  <div class="step-number">Create App</div>
+  <p>Created an application named <strong>"Finny"</strong> in OneLogin. Application type: <strong>OpenID Connect (OIDC)</strong>.</p>
+</div>
+
+<h2>Step 2: Configuration</h2>
+
+<h3>2a. Configuration Tab</h3>
+
+<table>
+  <tr>
+    <th>Setting</th>
+    <th>Value</th>
+  </tr>
+  <tr>
+    <td>Redirect URIs</td>
+    <td>All valid redirect URIs are added here (e.g., <code>https://claude.ai/api/mcp/auth_callback</code>)</td>
+  </tr>
+</table>
+
+<h3>2b. SSO Tab</h3>
+
+<table>
+  <tr>
+    <th>Setting</th>
+    <th>Value</th>
+  </tr>
+  <tr>
+    <td>Client ID</td>
+    <td>Provided by OneLogin (share with us)</td>
+  </tr>
+  <tr>
+    <td>Client Secret</td>
+    <td>Provided by OneLogin</td>
+  </tr>
+  <tr>
+    <td>Issuer URL</td>
+    <td>Provided by OneLogin (share with us)</td>
+  </tr>
+  <tr>
+    <td>App Type</td>
+    <td><strong>Web</strong></td>
+  </tr>
+  <tr>
+    <td>Token Endpoint</td>
+    <td><strong>None (PKCE)</strong></td>
+  </tr>
+  <tr>
+    <td>Access Token Timeout</td>
+    <td>60 minutes</td>
+  </tr>
+  <tr>
+    <td>Refresh Token Timeout</td>
+    <td>1440 minutes (24 hours)</td>
+  </tr>
+</table>
+
+<h3>2c. Access Tab</h3>
+
+<table>
+  <tr>
+    <th>Setting</th>
+    <th>Value</th>
+  </tr>
+  <tr>
+    <td>Role</td>
+    <td>Created a role named <strong>"Finny"</strong>. Users belonging to this role will be able to access the application.</td>
+  </tr>
+</table>
+
+<h3>2d. Users Tab</h3>
+
+<table>
+  <tr>
+    <th>Setting</th>
+    <th>Value</th>
+  </tr>
+  <tr>
+    <td>Role Assignment</td>
+    <td>Assigned the "Finny" role to authorized users. Users with this role are able to access the app.</td>
+  </tr>
+</table>
+
+<h2>Summary</h2>
+
+<div class="step">
+  <div class="step-number">What to share with us</div>
+  <p><strong>Client ID</strong>, <strong>Client Secret</strong> (Optional — required only for machine-to-machine integrations using <code>client_credentials</code> grant), and <strong>Issuer URL</strong> from the SSO tab.</p>
+</div>
+
+</body>
+</html>
