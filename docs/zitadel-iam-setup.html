@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zitadel IAM Setup — Self-Hosted Identity Provider</title>
+  <style>
+    body { max-width: 900px; margin: 0 auto; padding: 40px 20px; font-family: system-ui, -apple-system, sans-serif; line-height: 1.7; color: #1a1a1a; }
+    h1 { border-bottom: 2px solid #333; padding-bottom: 10px; }
+    h2 { margin-top: 2em; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+    h3 { margin-top: 1.5em; }
+    table { width: 100%; border-collapse: collapse; margin: 1em 0; }
+    th, td { border: 1px solid #ddd; padding: 10px 14px; text-align: left; }
+    th { background: #f5f5f5; }
+    code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+    pre { background: #f5f5f5; padding: 16px; border-radius: 6px; overflow-x: auto; font-size: 0.9em; }
+    .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px 16px; margin: 1em 0; }
+    .info { background: #e7f3ff; border-left: 4px solid #2196F3; padding: 12px 16px; margin: 1em 0; }
+    ul { margin: 0.5em 0; }
+    li { margin: 0.3em 0; }
+  </style>
+</head>
+<body>
+
+<h1>Zitadel IAM Setup — Self-Hosted Identity Provider</h1>
+
+<p>This document covers setting up Zitadel as an identity provider for clients who do not have their own SSO system (OneLogin, Okta, Azure AD). When a client already has enterprise SSO, use their provider directly — Zitadel is not needed.</p>
+
+<h2>1. Bridge Environment Variables</h2>
+
+<pre>
+AUTH_MODE=oidc
+OIDC_ISSUER=https://auth.prod.11mirror.com        # prod
+# OIDC_ISSUER=https://auth.staging.11mirror.com   # staging
+OIDC_CLIENT_ID=&lt;oidc-app-client-id&gt;
+OIDC_AUDIENCE=&lt;expected-aud-claim&gt;
+</pre>
+
+<p>Set <code>AUTH_MODE=builtin</code> to disable external OIDC and use the bridge's built-in OAuth server (auto-approve flow, no external provider).</p>
+
+<h2>2. Installing Zitadel + Postgres</h2>
+
+<h3>Infrastructure Path</h3>
+
+<p>Docker Compose file: <code>infra/zitadel-auth/docker-compose.yml</code></p>
+
+<p>The compose file runs two containers:</p>
+<ul>
+  <li><strong>Postgres 16</strong> — Zitadel's backing database</li>
+  <li><strong>Zitadel v2.71.6</strong> — the identity provider</li>
+</ul>
+
+<div class="warning">
+  <strong>Important: Use Zitadel v2.71.6, NOT latest (v4.x).</strong><br>
+  Zitadel v4.x ships login v2 as a separate Next.js application that is NOT bundled in the Docker image. Accessing <code>/ui/v2/login/login</code> returns <code>{"code":5,"message":"Not Found"}</code>. There is no way to make login v2 work without deploying the separate frontend container (which does not exist as a published image).<br><br>
+  Zitadel v2.71.6 has login v1 built into the same binary — fully self-contained, no additional containers needed.
+</div>
+
+<h3>Docker Compose Configuration</h3>
+
+<p>Key environment variables in the compose file:</p>
+
+<table>
+  <tr><th>Variable</th><th>Purpose</th></tr>
+  <tr><td><code>ZITADEL_MASTERKEY</code></td><td>Encryption key (32 hex chars). Generate: <code>openssl rand -hex 16</code></td></tr>
+  <tr><td><code>ZITADEL_EXTERNALDOMAIN</code></td><td>Public domain (e.g., <code>auth.staging.11mirror.com</code>)</td></tr>
+  <tr><td><code>ZITADEL_EXTERNALPORT</code></td><td><code>443</code> (Caddy handles TLS)</td></tr>
+  <tr><td><code>ZITADEL_EXTERNALSECURE</code></td><td><code>true</code></td></tr>
+  <tr><td><code>ZITADEL_DB_PASSWORD</code></td><td>Postgres password. Generate: <code>openssl rand -hex 16</code></td></tr>
+  <tr><td><code>ZITADEL_ADMIN_PASSWORD</code></td><td>Initial admin user password</td></tr>
+  <tr><td><code>DEPLOY_ENV</code></td><td><code>staging</code> or <code>production</code> (determines data path)</td></tr>
+</table>
+
+<p>Data path: <code>/opt/deployments/${DEPLOY_ENV}/auth/pgdata</code></p>
+
+<h3>Port Mapping</h3>
+
+<table>
+  <tr><th>Service</th><th>Container Port</th><th>Host Port</th><th>Notes</th></tr>
+  <tr><td>Zitadel</td><td>8080</td><td>8090</td><td>8080 may be taken by other services (e.g., OpenShell)</td></tr>
+  <tr><td>Postgres</td><td>5432</td><td>5433</td><td>Avoids conflict with existing Postgres</td></tr>
+</table>
+
+<h3>Caddy Configuration</h3>
+
+<p>Add to the host's Caddyfile:</p>
+
+<pre>
+auth.staging.11mirror.com {
+    reverse_proxy 127.0.0.1:8090
+}
+</pre>
+
+<p>Caddy handles TLS via Let's Encrypt automatically. DNS A record must point to the EC2's IP.</p>
+
+<h3>Starting Zitadel</h3>
+
+<pre>
+cd /opt/deployments/staging/auth
+docker compose up -d
+</pre>
+
+<p>First boot runs <code>start-from-init</code> which creates the database schema and the initial admin user. Takes ~30-60 seconds.</p>
+
+<h3>Admin Login</h3>
+
+<p>After first boot, the admin username follows the pattern:</p>
+
+<pre>admin@zitadel.&lt;external-domain&gt;</pre>
+
+<p>For staging: <code>admin@zitadel.auth.staging.11mirror.com</code></p>
+
+<div class="info">
+  <strong>Zitadel Console URL:</strong> <code>https://auth.staging.11mirror.com/ui/console/</code>
+</div>
+
+<div class="warning">
+  <strong>Important:</strong> If you disable username/password login in the login policy (e.g., after adding Google), you will be locked out of the admin console. Always keep "Allow username/password" enabled as a fallback for the admin user.
+</div>
+
+<h2>3. Creating a Project and OIDC Application</h2>
+
+<h3>3a. Create Project</h3>
+
+<ol>
+  <li>Log in to Zitadel Console</li>
+  <li>Go to <strong>Projects</strong> → <strong>Create New Project</strong></li>
+  <li>Name it (e.g., "11mirror-agents")</li>
+  <li>Note the <strong>Project ID</strong> — this becomes the <code>OIDC_AUDIENCE</code> value</li>
+</ol>
+
+<h3>3b. Create OIDC Application</h3>
+
+<ol>
+  <li>Inside the project → <strong>Applications</strong> → <strong>New</strong></li>
+  <li>Name it (e.g., "lolly-staging")</li>
+  <li>Set <strong>Application Type</strong>: <strong>Web</strong></li>
+  <li>Set <strong>Authentication Method</strong>: <strong>PKCE</strong></li>
+  <li>Add <strong>Redirect URIs</strong>:
+    <ul>
+      <li><code>https://claude.ai/api/mcp/auth_callback</code> (for CoWork)</li>
+      <li><code>https://lolly.staging.11mirror.com/auth-test</code> (for our test page)</li>
+      <li>Any additional test URIs as needed</li>
+    </ul>
+  </li>
+  <li>Click <strong>Create</strong></li>
+  <li>Then it shows <strong>OIDC Configuration</strong> Under <strong>Grant Types</strong>, enable:
+    <ul>
+      <li><strong>Authorization Code</strong> (default)</li>
+      <li><strong>Refresh Token</strong></li>
+    </ul>
+  </li>
+  <li>Save → note the <strong>Client ID</strong> — this becomes <code>OIDC_CLIENT_ID</code></li>
+</ol>
+
+<h3>3c. Token Settings</h3>
+
+<ol>
+  <li>In the app settings, find <strong>Token Settings</strong> or <strong>Access Token Type</strong></li>
+  <li>Change from "Bearer (opaque)" to <strong>JWT</strong></li>
+  <li>Enable these checkboxes:
+    <ul>
+      <li><strong>Add user roles to the access token</strong> — Yes</li>
+      <li><strong>User roles inside ID Token</strong> — Yes</li>
+      <li><strong>User Info inside ID Token</strong> — Yes</li>
+    </ul>
+  </li>
+  <li><strong>Clock Skew</strong> — leave at 0 (default)</li>
+  <li>Save</li>
+</ol>
+
+<h2>4. Configuring Google Login</h2>
+
+<h3>4a. Google Cloud Console Setup</h3>
+
+<p>Create a project in <a href="https://console.cloud.google.com/">Google Cloud Console</a> (or use an existing one). The project has these key sections:</p>
+
+<table>
+  <tr><th>Section</th><th>Purpose</th></tr>
+  <tr><td>Overview</td><td>Project dashboard</td></tr>
+  <tr><td>Branding</td><td>Add <strong>Authorized domains</strong> (e.g., <code>11mirror.com</code>)</td></tr>
+  <tr><td>Audience</td><td><strong>Publish the app</strong> — move from "Testing" to "In production" so external users can authenticate</td></tr>
+  <tr><td>Clients</td><td>Create and manage OAuth 2.0 client credentials</td></tr>
+</table>
+
+<h4>Create OAuth Client</h4>
+
+<ol>
+  <li>Go to <strong>Clients</strong> → <strong>Create Client</strong></li>
+  <li>Application type: <strong>Web application</strong></li>
+  <li>Name it (e.g., "Zitadel Auth")</li>
+  <li>Click into the created client and add <strong>Authorized redirect URI</strong>:
+    <pre>https://auth.staging.11mirror.com/ui/login/login/externalidp/callback</pre>
+    (Replace <code>staging</code> with <code>prod</code> for production)
+  </li>
+  <li>Note the <strong>Client ID</strong> and <strong>Client Secret</strong></li>
+</ol>
+
+<h4>Publish the App</h4>
+
+<ol>
+  <li>Go to <strong>Audience</strong> section</li>
+  <li>Set <strong>User Type</strong> to <strong>External</strong></li>
+  <li>Change publishing status from "Testing" to <strong>"In production"</strong></li>
+  <li>This is required for external users (non-test accounts) to authenticate via Google</li>
+</ol>
+
+<h4>Authorized Domains</h4>
+
+<ol>
+  <li>Go to <strong>Branding</strong> section</li>
+  <li>Add your domain (e.g., <code>11mirror.com</code>) under <strong>Authorized domains</strong></li>
+</ol>
+
+<h3>4b. Zitadel Console Configuration</h3>
+
+<ol>
+  <li>Go to <strong>Settings</strong> (gear icon) → <strong>Identity Providers</strong> → <strong>Google</strong></li>
+  <li>Paste the Google <strong>Client ID</strong> and <strong>Client Secret</strong></li>
+  <li>Click <strong>Optional</strong>, Configure auto-creation settings:
+    <table>
+      <tr><th>Setting</th><th>Value</th><th>Reason</th></tr>
+      <tr><td>Automatic creation</td><td>Yes</td><td>Creates Zitadel user on first Google login</td></tr>
+      <tr><td>Automatic update</td><td>Yes</td><td>Keeps profile/email in sync with Google</td></tr>
+      <tr><td>Account creation allowed (manually)</td><td>No</td><td>Hides the "Register" button</td></tr>
+      <tr><td>Account linking allowed (manually)</td><td>No</td><td>Hides the "Link" button</td></tr>
+      <tr><td>Determines whether an identity will be prompted to be linked to an existing account</td><td>Disabled</td><td>Default</td></tr>
+    </table>
+  </li>
+  <li>Click <strong>Create</strong> and then <strong>Save</strong> to activate the provider</li>
+  <li>Now you will see this entry above the <strong>Add provider</strong> options. On mouse-over, it will show a <strong>tick</strong>icon. Click to <strong>Set as available</strong></li>
+</ol>
+
+<h3>4c. Enable on Login Policy</h3>
+
+<ol>
+  <li>Go to <strong>Settings</strong> → <strong>Login Behavior and Security</strong> → <strong>Login Form</strong></li>
+  <li>Keep following as ticked/enabled. Rest should be disabled:
+    <ul>
+      <li>"Username and Password allowed" — admin fallback</li>
+      <li>External Login allowed</li>
+      <li>Domain Discovery allowed</li>
+    </ul>
+  </li>
+  <li>Save</li>
+</ol>
+
+<h2>5. Zitadel Login URL</h2>
+
+<table>
+  <tr><th>Environment</th><th>Login URL</th></tr>
+  <tr><td>Staging</td><td><code>https://auth.staging.11mirror.com/ui/login/login</code></td></tr>
+  <tr><td>Production</td><td><code>https://auth.prod.11mirror.com/ui/login/login</code></td></tr>
+  <tr><td>Admin Console</td><td><code>https://auth.staging.11mirror.com/ui/console/</code></td></tr>
+</table>
+
+<p>Users never access these URLs directly — the MCP client (CoWork) redirects automatically via the OAuth discovery chain.</p>
+
+<h2>6. Auth Test Page</h2>
+
+<p>A static HTML test page is deployed at:</p>
+
+<pre>https://lolly.staging.11mirror.com/auth-test</pre>
+
+<p>This page simulates the CoWork OAuth flow: PKCE authorization code → token exchange → POST /mcp with JWT. Use it to verify the full auth chain without needing a CoWork subscription.</p>
+
+<h2>7. Key Learnings</h2>
+
+<table>
+  <tr><th>Issue</th><th>Resolution</th></tr>
+  <tr><td>Zitadel v4.x login v2 returns 404</td><td>Use v2.71.6 — login v1 is built-in</td></tr>
+  <tr><td><code>ZITADEL_EXTERNALDOMAIN</code> must match requests</td><td>Internal curl to <code>127.0.0.1</code> needs <code>Host:</code> header matching the external domain</td></tr>
+  <tr><td><code>sed -i</code> breaks Docker bind mounts</td><td>Creates new inode — must restart container after editing mounted files</td></tr>
+  <tr><td>Zitadel issues opaque tokens by default</td><td>Must set app's access token type to JWT in token settings</td></tr>
+  <tr><td>Port 8080 conflict</td><td>Map Zitadel to different host port (e.g., 8090)</td></tr>
+  <tr><td>Admin username format</td><td><code>admin@zitadel.&lt;external-domain&gt;</code></td></tr>
+  <tr><td>Locked out after disabling password login</td><td>Keep "Allow username/password" enabled; if locked out, reset DB and reinit</td></tr>
+  <tr><td>Zitadel is event-sourced</td><td>Direct DB updates to projections are overwritten on restart — use the API or console</td></tr>
+</table>
+
+<p><em>Document version: 2026-06-15</em></p>
+
+</body>
+</html>

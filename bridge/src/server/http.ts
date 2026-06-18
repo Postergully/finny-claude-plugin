@@ -28,6 +28,8 @@ import { mcpAuthRouter } from '@modelcontextprotocol/sdk/server/auth/router.js';
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
 
 import { HermesAuthProvider, type AuthProviderConfig } from '../auth/provider.js';
+import { createOidcVerifier, getOidcDiscovery, type OidcProviderConfig } from '../auth/oidc.js';
+import { initAccessDb } from '../auth/access-db.js';
 import { log, logError } from '../utils/logger.js';
 import { createMcpServer, type ToolRegistrationDeps } from './tools-registration.js';
 import { registerReadyRoute } from './ready.js';
@@ -106,6 +108,12 @@ export async function createHttpServer(
   config: HttpServerConfig,
   deps: ToolRegistrationDeps
 ): Promise<void> {
+  const env = process.env.ENV;
+  if (!env) {
+    throw new Error('ENV must be set (e.g., staging, production)');
+  }
+  initAccessDb(env);
+
   const authEnabled = !!config.authConfig?.clientId;
   const corsConfig = loadCorsConfig();
 
@@ -166,10 +174,66 @@ export async function createHttpServer(
   // --- Access log middleware (before auth so rejected requests are logged) ---
   app.use(accessLogMiddleware());
 
-  // --- OAuth routes (if auth enabled) ---
+  // --- Auth mode selection ---
+  const authMode = process.env.AUTH_MODE === 'oidc' ? 'oidc' : 'builtin';
   let authMiddleware: ((req: Request, res: Response, next: NextFunction) => void) | undefined;
 
-  if (authEnabled) {
+  if (authMode === 'oidc') {
+    const oidcIssuer = process.env.OIDC_ISSUER;
+    const oidcAudience = process.env.OIDC_AUDIENCE;
+    if (!oidcIssuer || !oidcAudience) {
+      throw new Error('AUTH_MODE=oidc requires OIDC_ISSUER and OIDC_AUDIENCE env vars');
+    }
+
+    const oidcConfig: OidcProviderConfig = {
+      issuer: oidcIssuer,
+      audience: oidcAudience,
+      jwksUri: process.env.OIDC_JWKS_URI || undefined,
+    };
+    const verifier = await createOidcVerifier(oidcConfig);
+
+    const issuerUrl = config.issuerUrl
+      ? new URL(config.issuerUrl)
+      : new URL(`http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
+    const baseUrl = issuerUrl.toString().replace(/\/$/, '');
+
+    // Serve OAuth Authorization Server metadata pointing to the OIDC provider
+    app.get('/.well-known/oauth-authorization-server', async (_req: Request, res: Response) => {
+      try {
+        const discovery = await getOidcDiscovery(oidcIssuer);
+        res.json({
+          issuer: discovery.issuer,
+          authorization_endpoint: discovery.authorization_endpoint,
+          token_endpoint: discovery.token_endpoint,
+          registration_endpoint: discovery.registration_endpoint,
+          jwks_uri: discovery.jwks_uri,
+          scopes_supported: discovery.scopes_supported || ['openid', 'profile', 'email'],
+          response_types_supported: discovery.response_types_supported || ['code'],
+          grant_types_supported: discovery.grant_types_supported || ['authorization_code', 'refresh_token'],
+          code_challenge_methods_supported: discovery.code_challenge_methods_supported || ['S256'],
+          token_endpoint_auth_methods_supported: discovery.token_endpoint_auth_methods_supported || ['client_secret_post', 'client_secret_basic'],
+          revocation_endpoint: discovery.revocation_endpoint,
+        });
+      } catch (err) {
+        logError('Failed to fetch OIDC discovery', err);
+        res.status(502).json({ error: 'Failed to fetch authorization server metadata' });
+      }
+    });
+
+    // Protected Resource Metadata (RFC 9728)
+    app.get('/.well-known/oauth-protected-resource/:path', (_req: Request, res: Response) => {
+      res.json({
+        resource: `${baseUrl}/${_req.params.path}`,
+        authorization_servers: [oidcIssuer.replace(/\/$/, '')],
+        scopes_supported: ['openid', 'profile', 'email', 'mcp:tools'],
+      });
+    });
+
+    const resourceMetadataUrl = `${baseUrl}/.well-known/oauth-protected-resource/mcp`;
+    authMiddleware = requireBearerAuth({ verifier, resourceMetadataUrl });
+
+    log(`Auth mode: oidc (issuer: ${oidcIssuer})`);
+  } else if (authEnabled) {
     const provider = new HermesAuthProvider(config.authConfig!);
     const issuerUrl = config.issuerUrl
       ? new URL(config.issuerUrl)
@@ -208,7 +272,8 @@ export async function createHttpServer(
     res.json({
       status: 'ok',
       transport: 'http',
-      auth: authEnabled,
+      auth: authEnabled || authMode === 'oidc',
+      authMode,
     });
   });
 
@@ -304,10 +369,15 @@ export async function createHttpServer(
 
   const httpServer: HttpServer = app.listen(config.port, config.host, () => {
     log(`HTTP server listening on ${config.host}:${config.port}`);
-    log(`Auth enabled: ${authEnabled}`);
+    log(`Auth mode: ${authMode}`);
     log(`CORS origins: ${corsConfig.enabled ? corsConfig.origins.join(', ') : 'disabled'}`);
 
-    if (authEnabled) {
+    if (authMode === 'oidc') {
+      log('OIDC authentication is REQUIRED for all connections');
+      log('Endpoints:');
+      log('  GET  /.well-known/oauth-authorization-server          - OIDC provider metadata');
+      log('  GET  /.well-known/oauth-protected-resource/mcp        - Protected resource metadata');
+    } else if (authEnabled) {
       log('OAuth 2.1 authentication is REQUIRED for all connections');
       log('Endpoints:');
       log('  GET  /.well-known/oauth-authorization-server          - OAuth metadata');
