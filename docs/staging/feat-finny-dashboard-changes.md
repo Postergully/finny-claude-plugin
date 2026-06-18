@@ -19,6 +19,10 @@
 
 ## Non-git changes (replay manually on prod, in order)
 
+> **Fast path (recommended for first deploy):** run `deploy/scripts/deploy-finny-dashboard.sh` from your laptop. It does steps 2-9 automatically (build local, upload to S3, drive EC2 via SSM, verify loopback). After it finishes, you still do step 10 (Caddy reload) and step 11 (browser smoke). Steps 1, 4, and 6 are pre-flight and already verified by `Task #6` of the design doc.
+>
+> **Manual path** (below) is the fallback if the script breaks or for documentation.
+>
 > Run as `ubuntu` on prod EC2 `i-0ef58962b09d490ee` via SSM unless otherwise noted.
 
 1. **DNS A-record** (already done 2026-06-18): `dashboard.finny.prod.11mirror.com` → `34.200.24.169` (same EC2 IP as `finny.prod.11mirror.com`).

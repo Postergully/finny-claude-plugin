@@ -1,8 +1,12 @@
 [Unit]
 Description=Finny Dashboard (TanStack Start server on 127.0.0.1:3001)
-After=network-online.target hermes-api.service
+After=network-online.target
 Wants=network-online.target
-Requires=hermes-api.service
+# Note: the Hermes gateway runs as a bare process under user `ubuntu`
+# (`/home/ubuntu/.hermes/hermes-agent/venv/bin/python -m hermes_cli.main gateway run`),
+# not a systemd unit. The dashboard talks to it over loopback HTTP.
+# If gateway availability becomes brittle, wrap the gateway in its own
+# systemd unit and add Requires= here.
 
 [Service]
 Type=simple
