@@ -1,0 +1,20 @@
+[Unit]
+Description=Finny Dashboard (TanStack Start server on 127.0.0.1:3001)
+After=network-online.target hermes-api.service
+Wants=network-online.target
+Requires=hermes-api.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/finny/dashboard
+EnvironmentFile=/opt/finny/dashboard/.env
+Environment=HOST=127.0.0.1
+Environment=PORT=3001
+ExecStart=/usr/bin/node /opt/finny/dashboard/server-entry.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
