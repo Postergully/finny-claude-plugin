@@ -88,6 +88,11 @@ log "uploading to ${S3_URL}…"
 aws s3 cp "${TARBALL}" "${S3_URL}" --no-progress
 log "uploaded."
 
+# Generate a presigned URL the EC2 box can use without needing s3:GetObject
+# in its instance profile. Valid 30 min (build + transfer fits comfortably).
+log "generating presigned download URL (30 min validity)…"
+PRESIGNED_URL=$(aws s3 presign "${S3_URL}" --expires-in 1800)
+
 # ------- 4. read systemd unit content (we'll inline it via SSM) -------
 SYSTEMD_UNIT_B64=$(base64 < "${SYSTEMD_UNIT_SRC}" | tr -d '\n')
 
@@ -112,14 +117,15 @@ REMOTE_SCRIPT=$(cat <<REMOTE_EOF
 set -e
 set -o pipefail
 
-S3_URL='${S3_URL}'
+PRESIGNED_URL='${PRESIGNED_URL}'
 TARGET='${TARGET_DIR}'
 BAK='${BAK_DIR}'
 UNIT_PATH='/etc/systemd/system/finny-dashboard.service'
 UNIT_B64='${SYSTEMD_UNIT_B64}'
 
-echo "=== 1. download tarball ==="
-sudo -iu ubuntu bash -c "aws s3 cp '\${S3_URL}' /tmp/finny-dashboard.tgz --no-progress"
+echo "=== 1. download tarball (presigned URL, no IAM dep) ==="
+sudo -u ubuntu curl -fsSL -o /tmp/finny-dashboard.tgz "\${PRESIGNED_URL}"
+ls -lh /tmp/finny-dashboard.tgz
 
 echo
 echo "=== 2. backup existing /opt/finny/dashboard if any ==="
