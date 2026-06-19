@@ -20,6 +20,7 @@
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse, Server as HttpServer } from 'node:http';
 import type { Request, Response, NextFunction } from 'express';
+import express from 'express';
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -197,21 +198,25 @@ export async function createHttpServer(
       : new URL(`http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
     const baseUrl = issuerUrl.toString().replace(/\/$/, '');
 
-    // Serve OAuth Authorization Server metadata pointing to the OIDC provider
+    const tokenProxyPath = '/oauth/token';
+    const authorizeProxyPath = '/oauth/authorize';
+
+    // Serve OAuth Authorization Server metadata — all endpoints on OUR origin so CoWork
+    // doesn't re-derive endpoints from the authorization_endpoint's origin.
     app.get('/.well-known/oauth-authorization-server', async (_req: Request, res: Response) => {
       try {
         const discovery = await getOidcDiscovery(oidcIssuer);
         res.json({
-          issuer: discovery.issuer,
-          authorization_endpoint: discovery.authorization_endpoint,
-          token_endpoint: discovery.token_endpoint,
-          registration_endpoint: discovery.registration_endpoint,
+          issuer: baseUrl,
+          authorization_endpoint: `${baseUrl}${authorizeProxyPath}`,
+          token_endpoint: `${baseUrl}${tokenProxyPath}`,
+          registration_endpoint: `${baseUrl}/oauth/register`,
           jwks_uri: discovery.jwks_uri,
           scopes_supported: discovery.scopes_supported || ['openid', 'profile', 'email'],
           response_types_supported: discovery.response_types_supported || ['code'],
           grant_types_supported: discovery.grant_types_supported || ['authorization_code', 'refresh_token'],
           code_challenge_methods_supported: discovery.code_challenge_methods_supported || ['S256'],
-          token_endpoint_auth_methods_supported: discovery.token_endpoint_auth_methods_supported || ['client_secret_post', 'client_secret_basic'],
+          token_endpoint_auth_methods_supported: ['none'],
           revocation_endpoint: discovery.revocation_endpoint,
         });
       } catch (err) {
@@ -220,12 +225,69 @@ export async function createHttpServer(
       }
     });
 
+    // Authorize proxy — 302 redirects to the real IdP authorize endpoint.
+    // Keeps authorization_endpoint on our origin so CoWork uses our token_endpoint.
+    // Strips `resource` because OneLogin binds it to the auth code server-side
+    // and rejects the token exchange if the resource was present at authorize-time.
+    app.get(authorizeProxyPath, async (req: Request, res: Response) => {
+      try {
+        const discovery = await getOidcDiscovery(oidcIssuer);
+        const target = new URL(discovery.authorization_endpoint);
+        for (const [key, value] of Object.entries(req.query)) {
+          if (key === 'resource' || key === 'audience') continue;
+          if (typeof value === 'string') target.searchParams.set(key, value);
+        }
+        res.redirect(302, target.toString());
+      } catch (err) {
+        logError('Authorize proxy error', err);
+        res.status(502).json({ error: 'authorize_proxy_error', error_description: 'Failed to reach authorization endpoint' });
+      }
+    });
+
+    // Token proxy — strips `resource`/`audience` and forwards to the real token endpoint.
+    app.post(tokenProxyPath, express.urlencoded({ extended: false }), express.json(), async (req: Request, res: Response) => {
+      try {
+        const discovery = await getOidcDiscovery(oidcIssuer);
+        const body = req.body as Record<string, string> | undefined;
+        const params = new URLSearchParams();
+        if (body && typeof body === 'object') {
+          for (const [key, value] of Object.entries(body)) {
+            if (key === 'resource' || key === 'audience') continue;
+            if (typeof value === 'string') params.set(key, value);
+          }
+        }
+        const tokenRes = await fetch(discovery.token_endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString(),
+        });
+        const tokenData = await tokenRes.text();
+        res.status(tokenRes.status).set('Content-Type', tokenRes.headers.get('content-type') || 'application/json').send(tokenData);
+      } catch (err) {
+        logError('Token proxy error', err);
+        res.status(502).json({ error: 'token_proxy_error', error_description: 'Failed to reach token endpoint' });
+      }
+    });
+
+    // DCR proxy — returns the static client_id for MCP clients that attempt registration
+    app.post('/oauth/register', express.json(), (_req: Request, res: Response) => {
+      const oidcClientId = process.env.OIDC_CLIENT_ID || '';
+      res.status(201).json({
+        client_id: oidcClientId,
+        client_name: 'MCP Client',
+        redirect_uris: ['https://claude.ai/api/mcp/auth_callback'],
+        grant_types: ['authorization_code', 'refresh_token'],
+        response_types: ['code'],
+        token_endpoint_auth_method: 'none',
+      });
+    });
+
     // Protected Resource Metadata (RFC 9728)
     app.get('/.well-known/oauth-protected-resource/:path', (_req: Request, res: Response) => {
       res.json({
         resource: `${baseUrl}/${_req.params.path}`,
-        authorization_servers: [oidcIssuer.replace(/\/$/, '')],
-        scopes_supported: ['openid', 'profile', 'email', 'mcp:tools'],
+        authorization_servers: [baseUrl],
+        scopes_supported: ['openid', 'profile', 'email'],
       });
     });
 
