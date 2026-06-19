@@ -1,0 +1,22 @@
+[Unit]
+Description=Hermes Agent Dashboard - Sessions/Skills/Config/Memory/Jobs API on 127.0.0.1:9119
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/home/ubuntu/.hermes/hermes-agent/venv/bin/hermes dashboard --skip-build --no-open --port 9119 --host 127.0.0.1
+WorkingDirectory=/home/ubuntu/.hermes/hermes-agent
+Environment="PATH=/home/ubuntu/.hermes/hermes-agent/venv/bin:/usr/bin:/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="VIRTUAL_ENV=/home/ubuntu/.hermes/hermes-agent/venv"
+Environment="HERMES_HOME=/home/ubuntu/.hermes"
+Restart=on-failure
+RestartSec=5
+KillMode=mixed
+KillSignal=SIGTERM
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
