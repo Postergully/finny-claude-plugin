@@ -156,16 +156,24 @@ sudo chown -R ubuntu:ubuntu "\${TARGET}"
 
 echo
 echo "=== 4. write .env ==="
-# Read API_SERVER_KEY from ~/.hermes/.env once, write it directly into dashboard .env.
-# Never printed.
+# Read keys from ~/.hermes/.env once, write them directly into dashboard .env.
+# Values never printed. API_SERVER_KEY is required (existed since v1).
+# HINDSIGHT_API_KEY is required for the External Memory tab routes
+# (/api/external-memory/*); missing key → 503 from those endpoints.
 API_KEY=\$(sudo -u ubuntu bash -c "grep '^API_SERVER_KEY=' /home/ubuntu/.hermes/.env | head -1 | cut -d= -f2-")
 if [ -z "\${API_KEY}" ]; then
   echo "ERROR: API_SERVER_KEY missing from ~/.hermes/.env" >&2
   exit 1
 fi
+HINDSIGHT_KEY=\$(sudo -u ubuntu bash -c "grep '^HINDSIGHT_API_KEY=' /home/ubuntu/.hermes/.env | head -1 | cut -d= -f2-")
+if [ -z "\${HINDSIGHT_KEY}" ]; then
+  echo "ERROR: HINDSIGHT_API_KEY missing from ~/.hermes/.env (required for External Memory tab)" >&2
+  exit 1
+fi
 sudo -u ubuntu bash -c "cat > '\${TARGET}/.env' <<ENV_EOF
 HERMES_API_URL=http://127.0.0.1:8642
 HERMES_API_TOKEN=\${API_KEY}
+HINDSIGHT_API_KEY=\${HINDSIGHT_KEY}
 HOST=127.0.0.1
 PORT=3001
 ENV_EOF"
