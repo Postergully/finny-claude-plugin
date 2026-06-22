@@ -291,6 +291,14 @@ If a future task needs any of these, they are all in `hindsight_client_api/api/*
 
 ## SPA contract
 
+> **Naming note (read before implementing the backend).** The interface names below
+> (`ProvidersResponse`, `CandidatesResponse`, `SearchResponse` — plural) follow the task-list
+> spec, which is authoritative for backend route work. The SPA source happens to declare them
+> in the singular (`ProviderResponse`, `CandidateResponse`, `SearchResponse`) at
+> `external-memory-browser-screen.tsx`. The shapes are identical; only the local TS alias name
+> differs. Backend implementors should pick one and be consistent — do not rename the SPA's
+> local types just to match.
+
 The dashboard SPA does **not** call Hindsight directly. It calls a dashboard backend (Path B) that translates its own contract to Hindsight. The shapes below are what the SPA actually issues and consumes; the backend MUST honor them. The SPA source of truth is `~/code/finny-hermes-dashboard/src/screens/memory/external-memory-browser-screen.tsx`.
 
 The SPA hits three read endpoints under `/api/external-memory/*`. Mutations (`POST` / `DELETE /api/external-memory/candidates`) are out of scope for the read contract and not documented here.
