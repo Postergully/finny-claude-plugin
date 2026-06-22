@@ -26,14 +26,19 @@ set -euo pipefail
 
 # ------- config -------
 INSTANCE_ID="i-0ef58962b09d490ee"  # default = prod
+DEFAULT_BRANCH="main"
+BRANCH="${DEFAULT_BRANCH}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --instance) INSTANCE_ID="$2"; shift 2 ;;
+    --branch)   BRANCH="$2"; shift 2 ;;
     -h|--help)
-      echo "usage: $0 [--instance <ec2-instance-id>]"
+      echo "usage: $0 [--instance <ec2-instance-id>] [--branch <branch>]"
       echo "  default instance = i-0ef58962b09d490ee (prod)"
       echo "  for staging use:   --instance i-0c2c974ff571162eb"
+      echo "  default branch   = ${DEFAULT_BRANCH} (in ~/code/finny-hermes-dashboard)"
+      echo "  --branch overrides for staging-only feature-branch deploys; loud warning fires when set"
       exit 0 ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
@@ -46,24 +51,43 @@ SYSTEMD_UNIT_SRC="${PLUGIN_REPO}/deploy/systemd/finny-dashboard.service"
 TARGET_DIR="/opt/finny/dashboard"
 BAK_DIR="/opt/finny/dashboard.bak.$(date +%Y%m%d-%H%M%S)"
 
-log() { printf "\033[1;36m[deploy]\033[0m %s\n" "$*"; }
-err() { printf "\033[1;31m[deploy:err]\033[0m %s\n" "$*" >&2; }
+log()  { printf "\033[1;36m[deploy]\033[0m %s\n" "$*"; }
+warn() { printf "\033[1;33m[deploy:warn]\033[0m %s\n" "$*" >&2; }
+err()  { printf "\033[1;31m[deploy:err]\033[0m %s\n" "$*" >&2; }
 
 # ------- 0. sanity -------
 log "verifying local repos…"
 [ -d "${DASHBOARD_REPO}/.git" ] || { err "dashboard repo not at ${DASHBOARD_REPO}"; exit 1; }
 [ -f "${SYSTEMD_UNIT_SRC}" ]    || { err "systemd unit not at ${SYSTEMD_UNIT_SRC}"; exit 1; }
 
-DASHBOARD_BRANCH=$(git -C "${DASHBOARD_REPO}" rev-parse --abbrev-ref HEAD)
-DASHBOARD_SHA=$(git -C "${DASHBOARD_REPO}" rev-parse --short HEAD)
 DASHBOARD_DIRTY=$(git -C "${DASHBOARD_REPO}" status --porcelain | wc -l | tr -d ' ')
-
-if [ "${DASHBOARD_BRANCH}" != "main" ]; then
-  err "dashboard repo is on '${DASHBOARD_BRANCH}', expected 'main'"
-  exit 1
-fi
 if [ "${DASHBOARD_DIRTY}" != "0" ]; then
   err "dashboard repo is dirty (uncommitted changes). commit or stash first."
+  exit 1
+fi
+
+if [ "${BRANCH}" != "${DEFAULT_BRANCH}" ]; then
+  # Loud warning: feature-branch builds are staging-only. Fire BEFORE checkout
+  # so the operator sees it even if fetch/checkout fails.
+  warn "================================================================"
+  warn "  BRANCH OVERRIDE IN USE: '${BRANCH}' (default is '${DEFAULT_BRANCH}')"
+  warn "  This produces a non-default tarball. Use staging instance only."
+  warn "  If this targets prod (i-0ef58962b09d490ee), abort now (Ctrl-C)."
+  warn "================================================================"
+fi
+
+log "fetching dashboard repo and checking out '${BRANCH}'…"
+git -C "${DASHBOARD_REPO}" fetch --quiet origin "${BRANCH}"
+git -C "${DASHBOARD_REPO}" checkout --quiet "${BRANCH}"
+# Fast-forward to origin tip so we build the latest pushed commit, not a stale
+# local copy. Safe because we already verified the worktree is clean.
+git -C "${DASHBOARD_REPO}" merge --quiet --ff-only "origin/${BRANCH}"
+
+DASHBOARD_BRANCH=$(git -C "${DASHBOARD_REPO}" rev-parse --abbrev-ref HEAD)
+DASHBOARD_SHA=$(git -C "${DASHBOARD_REPO}" rev-parse --short HEAD)
+
+if [ "${DASHBOARD_BRANCH}" != "${BRANCH}" ]; then
+  err "dashboard repo is on '${DASHBOARD_BRANCH}' after checkout, expected '${BRANCH}'"
   exit 1
 fi
 
