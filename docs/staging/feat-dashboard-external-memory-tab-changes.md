@@ -3,12 +3,12 @@
 **Date tested:** `2026-06-22` → `2026-06-22`
 **Tested by:** `Postergully (orchestrator-driven, verifier-gated)`
 **Staging snapshot baseline:** prod AMI (current staging EC2 `i-0c2c974ff571162eb`, snapshot per `2026-06-22 ~06:20 UTC` deploy-log entry)
-**PR:** `<dashboard PR — see Task 10>` (this branch in `finny-claude-plugin`); paired dashboard PR opened against `Postergully/finny-hermes-dashboard@feat/external-memory-via-hindsight`.
+**PR:** [11mirror/finny-hermes-dashboard#1](https://github.com/11mirror/finny-hermes-dashboard/pull/1) (this branch in `finny-claude-plugin`); paired dashboard PR opened against `Postergully/finny-hermes-dashboard@feat/external-memory-via-hindsight`.
 
 ## Git changes (replay via merge)
 
 - `finny-claude-plugin@feat/dashboard-external-memory-tab`: `5600902`, `c6d9aa1`, `5dc7910`, `20df573` (Hindsight contract spec, SPA spec append, naming-note, `deploy-finny-dashboard.sh --branch` flag).
-- `finny-hermes-dashboard@feat/external-memory-via-hindsight`: `d2e037ca`, `570d1bd9`, `15a3c00d`, `99a04599` — `HindsightClient` + `/api/external-memory/{providers,candidates,search}` routes. PR: `<dashboard PR — see Task 10>`.
+- `finny-hermes-dashboard@feat/external-memory-via-hindsight`: `d2e037ca`, `570d1bd9`, `15a3c00d`, `99a04599` — `HindsightClient` + `/api/external-memory/{providers,candidates,search}` routes. PR: [11mirror/finny-hermes-dashboard#1](https://github.com/11mirror/finny-hermes-dashboard/pull/1).
 - `finny-hermes@<no branch>`: no changes (Path B locked — no Hermes Python edits).
 - `finny-hermes-config@<no branch>`: no changes.
 - `netsuite-kb@<no branch>`: no changes.

@@ -48,7 +48,7 @@ Append-only record of deploys to prod (`i-0ef58962b09d490ee`). Each entry per th
 
 ---
 
-## 2026-06-22 ~15:55 UTC — Postergully (orchestrator-driven, verifier-gated) (staging-only deploy: `feat/external-memory-via-hindsight`, PR `<dashboard PR — see Task 10>`)
+## 2026-06-22 ~15:55 UTC — Postergully (orchestrator-driven, verifier-gated) (staging-only deploy: `feat/external-memory-via-hindsight`, PR [11mirror/finny-hermes-dashboard#1](https://github.com/11mirror/finny-hermes-dashboard/pull/1))
 
 - **Scope:** staging EC2 only (`i-0c2c974ff571162eb`). No prod runtime changes. Companion to `feat/dashboard-external-memory-tab` in `finny-claude-plugin`.
 - **Goal:** smoke-test the new External Memory tab → Hindsight cloud routes (`GET /api/external-memory/{providers,candidates,search}`) end-to-end on staging.
