@@ -45,3 +45,21 @@ Append-only record of deploys to prod (`i-0ef58962b09d490ee`). Each entry per th
 - **All multi-line file transfer used S3 + presigned URL** instead of inline heredoc-in-JSON. Avoids both the JSON-escaping fragility AND the need for `s3:GetObject` on the EC2 instance role.
 - **Snapshots for rollback:** `/tmp/hermes-gateway.service.snapshot-20260622-060025`, `/tmp/hermes-dashboard.service.snapshot-20260622-061334`, `/etc/caddy/Caddyfile.snapshot-20260622-061814`.
 - **Out of scope:** Bedrock router config swap on staging (deferred to next PR per user direction). CI build/publish for the dashboard repo (still operator-laptop driven).
+
+---
+
+## 2026-06-22 ~15:55 UTC — Postergully (orchestrator-driven, verifier-gated) (staging-only deploy: `feat/external-memory-via-hindsight`, PR [11mirror/finny-hermes-dashboard#1](https://github.com/11mirror/finny-hermes-dashboard/pull/1))
+
+- **Scope:** staging EC2 only (`i-0c2c974ff571162eb`). No prod runtime changes. Companion to `feat/dashboard-external-memory-tab` in `finny-claude-plugin`.
+- **Goal:** smoke-test the new External Memory tab → Hindsight cloud routes (`GET /api/external-memory/{providers,candidates,search}`) end-to-end on staging.
+- **Pre-flight:** none. Staging was clean from the `2026-06-22 ~06:20 UTC` dashboard-vhost deploy.
+- **Dashboard install:** `./deploy/scripts/deploy-finny-dashboard.sh --instance i-0c2c974ff571162eb --branch feat/external-memory-via-hindsight`. Deployed SHA `99a04599` from `Postergully/finny-hermes-dashboard@feat/external-memory-via-hindsight`. The `--branch` flag itself was added in this PR (Task 7); first end-to-end exercise of it.
+- **Non-git change applied (manifest §Non-git changes):** appended `HINDSIGHT_API_KEY` to `/opt/finny/dashboard/.env`, value sourced via `sudo grep` from `~/.hermes/.env` (keys-only, value never printed into transcript). Deploy script writes a narrow `.env` and does not propagate this key; first smoke 503'd with `HINDSIGHT_API_KEY is not set in process.env` until the line was appended. `daemon-reload && systemctl restart finny-dashboard` afterward.
+- **Surface smoke:** green
+  - `curl http://127.0.0.1:3001/api/external-memory/providers` → `200`, providers=2.
+  - `curl http://127.0.0.1:3001/api/external-memory/candidates` → `200`, total=5984.
+  - `curl http://127.0.0.1:3001/api/external-memory/search?q=netsuite` → `200`, count=98.
+  - Browser smoke (gstack headless Chromium via `/browse`): External providers tab renders, sharechat provider selectable, candidate cards populate with UUID + body + timestamp. Screenshots in `finny-loops@domains/dashboard-external-memory/evidence/task-8-external-memory-{tab-populated,search-netsuite}.png`.
+- **Out of scope:** 5-tool MCP smoke / desktop dashboard chat / no-Slack-bleed check — N/A; this PR touches only the dashboard HTTP surface, no MCP/bridge or agent-loop changes.
+- **Outcome:** green. Manifest `docs/staging/feat-dashboard-external-memory-tab-changes.md` captures non-git replay steps for prod.
+- **Follow-up filed:** `deploy/scripts/deploy-finny-dashboard.sh` should propagate `HINDSIGHT_API_KEY` (and other dashboard-needed keys) automatically; current behavior writes a fixed narrow set and silently drops the rest.
