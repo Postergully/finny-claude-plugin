@@ -286,3 +286,110 @@ The OpenAPI client surfaces ~90 paths. The four above are sufficient for the das
 - `/v1/default/chunks/{chunk_id}` (chunk lookup)
 
 If a future task needs any of these, they are all in `hindsight_client_api/api/*.py` on the staging box, in the same `resource_path`/`method` shape used here.
+
+---
+
+## SPA contract
+
+The dashboard SPA does **not** call Hindsight directly. It calls a dashboard backend (Path B) that translates its own contract to Hindsight. The shapes below are what the SPA actually issues and consumes; the backend MUST honor them. The SPA source of truth is `~/code/finny-hermes-dashboard/src/screens/memory/external-memory-browser-screen.tsx`.
+
+The SPA hits three read endpoints under `/api/external-memory/*`. Mutations (`POST` / `DELETE /api/external-memory/candidates`) are out of scope for the read contract and not documented here.
+
+All requests are same-origin, no auth headers set by the SPA (it relies on cookie session managed elsewhere). All responses are parsed as JSON. On non-2xx, the SPA reads `response.text()` and throws — it does not branch on a structured error envelope.
+
+### 1. Providers — `GET /api/external-memory/providers`
+
+- **Request:** no query params, no body.
+- **Caller:** `providersQuery` (line 160-163).
+- **Response interface:**
+
+  ```ts
+  interface ExternalMemoryProvider {
+    id: string;            // rendered: <option value> + lookup key for activeProvider
+    label: string;         // rendered: <option> text + page heading (activeProvider.label)
+    capabilities: string[]; // ignored: typed but never read in JSX
+    dbPath: string;        // ignored
+    configPath: string;    // ignored
+    available: boolean;    // ignored: SPA shows all providers regardless
+  }
+
+  interface ProvidersResponse {
+    active: string;                       // rendered indirectly: seeds providerId state on first load
+    providers: ExternalMemoryProvider[];  // rendered: drives <select> options + activeProvider lookup
+  }
+  ```
+
+- **Render-vs-ignore notes:** of the six provider fields, only `id` and `label` are bound to JSX. `capabilities`, `dbPath`, `configPath`, `available` are typed in the SPA but never read; the backend may omit them and the UI will not break (assuming it doesn't validate the shape strictly — and `readJson` does not). Recommend the backend still send `available` since the type is non-optional and a future UI iteration is likely to gate on it.
+
+### 2. Candidates — `GET /api/external-memory/candidates`
+
+- **Request query params:**
+  - `provider` (string, required) — provider `id`.
+  - `state` (string, required) — one of `candidate | approved | rejected | all`.
+  - `limit` (int, optional) — only the counts probe sends `limit=1`; the main list call omits it.
+  - `offset` — never sent by the SPA. The backend can support it but the UI does not paginate.
+- **Callers:** `listQuery` (line 171-178) for the main list; `readStateCounts` (line 139-149) issues four parallel calls with `limit=1` per state to populate badge counts.
+- **Response interface:**
+
+  ```ts
+  interface ExternalMemoryCandidate {
+    provider: string;                    // rendered (detail view fallback): activeProvider?.label || selected.provider
+    id: string;                          // rendered: list item header + detail header + React key
+    text: string;                        // rendered: list item body (line-clamp-3) + detail body (whitespace-pre-wrap)
+    source: string;                      // rendered: detail "Source" field
+    metadata: Record<string, unknown>;   // rendered: detail "Metadata" preview (first 4 entries via metadataPreview)
+    state: string;                       // rendered: list pill + detail pill + drives candidateActionLabels
+    contentSha256: string;               // rendered: detail "SHA-256" field
+    createdAt: number;                   // ignored: typed but never read in JSX
+    updatedAt: number;                   // rendered: list timestamp + detail "Updated" (via formatTimestamp)
+  }
+
+  interface CandidateResponse {
+    provider: string;                    // ignored: echoed by backend, never read
+    state: string;                       // ignored: echoed, never read
+    count: number;                       // ignored: SPA derives count from candidates.length
+    total: number;                       // rendered (counts probe only): used as the per-state badge count
+    counts?: Partial<Record<           // rendered: preferred source for state-filter badges when present
+      'candidate' | 'approved' | 'rejected' | 'all',
+      number
+    >>;
+    candidates?: ExternalMemoryCandidate[]; // rendered: drives the list view
+  }
+  ```
+
+- **Render-vs-ignore notes:**
+  - `count`, `provider`, `state` echoes on the response are ignored. Backend may omit them with no UI impact, but the type marks them required — keep them for forward compatibility.
+  - `total` is read **only** by the counts probe (one-per-state). The main list call's `total` is ignored.
+  - `counts` is preferred over the parallel probe: `stateCounts = listQuery.data?.counts ?? countsQuery.data ?? {}`. If the backend returns `counts` on the main list response, the four probe calls become redundant work but still fire (the SPA does not gate them on `counts` presence). Backend implementors: returning `counts` is a perf win for the counts probe — but the SPA will still issue the four extra requests. Fixing that is a SPA change, not a backend change.
+  - `candidates` is optional; absence renders as "No memory rows found." So is `count` semantically — the SPA never trusts it.
+  - `createdAt` is on the candidate type but unused. `updatedAt` is the only timestamp the UI shows. The backend should still populate `createdAt` per type contract.
+  - Timestamp encoding: `formatTimestamp` accepts seconds **or** milliseconds (`< 10_000_000_000` is treated as seconds). Backend can send either; recommend milliseconds for unambiguity.
+
+### 3. Search — `GET /api/external-memory/search`
+
+- **Request query params:**
+  - `provider` (string, required).
+  - `q` (string, required) — already trimmed by the SPA before issuing.
+- **Caller:** `searchQuery` (line 186-193). Only fires when `searchTerm` is non-empty.
+- **Response interface:**
+
+  ```ts
+  interface SearchResponse {
+    provider: string;                   // ignored: echoed, never read
+    query: string;                      // ignored: echoed, never read
+    count: number;                      // ignored: SPA uses results.length
+    results?: ExternalMemoryCandidate[]; // rendered: replaces list when searching
+  }
+  ```
+
+  `ExternalMemoryCandidate` is identical to the candidates endpoint and rendered through the same list/detail components — same render-vs-ignore rules apply.
+
+- **Render-vs-ignore notes:** the backend can return `results` only and the UI works. `provider`, `query`, `count` echoes are unused. There is **no** `state` filter on search — when `searchTerm` is non-empty, the state filter buttons are `disabled`, and the result list intentionally crosses states. Backend search must therefore search across all states, not just `state='candidate'`.
+
+### Cross-endpoint observations
+
+- **No pagination UI.** The SPA renders whatever the backend returns in `candidates` / `results`. If the backend caps results, the user has no way to page through. Backend should pick a sane cap (e.g. 200) and document it elsewhere.
+- **No streaming, no websockets.** All three calls are simple JSON GETs cached by react-query.
+- **Cache invalidation:** mutations call `queryClient.invalidateQueries({ queryKey: ['external-memory'] })`, which refetches all three. Backend should be cheap on these reads.
+- **No error envelope contract.** `readJson` only branches on `response.ok`. Mutation errors (`mutateCandidate`) parse `payload?.error` as a string. The read endpoints have no equivalent path; non-2xx becomes the response body text in the thrown `Error`. Backend should return human-readable text or `{"error":"..."}` for 4xx/5xx but the SPA will not parse the latter on reads.
+- **Bank → provider mapping is the backend's problem.** The SPA's "provider" abstraction is broader than Hindsight banks — providers can be any external memory store. For the Hindsight provider specifically, the backend will map provider → Hindsight bank (e.g. `provider.id = "hindsight:sharechat"` decoding to `bank_id="sharechat"`). The SPA does not care.
