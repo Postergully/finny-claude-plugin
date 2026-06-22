@@ -25,3 +25,23 @@ Append-only record of deploys to prod (`i-0ef58962b09d490ee`). Each entry per th
 **Known deferred work**: `~/.hermes` working-tree drift (63 modified/untracked items as of audit time). Inventory in `docs/staging/known-drift.md`. Reconciliation via a follow-up PR.
 
 **Branch protection** on `deployed` branches: applied 2026-06-17 ~15:50 UTC for all 3 repos via `gh api`. Settings: `required_linear_history=true`, `allow_force_pushes=true` (operator force-push needed for rollback), `allow_deletions=false`. Verified on all 3 origins.
+
+---
+
+## 2026-06-22 ~06:20 UTC — Postergully (staging-only deploy: `feat/staging-dashboard-vhost`, PR #<TBD>)
+
+- **Scope:** staging EC2 only (`i-0c2c974ff571162eb` / `34.232.186.238`). No prod runtime changes.
+- **Goal:** stand up `https://dashboard.finny.staging.11mirror.com/` mirroring prod's dashboard URL. Two parallel browser URLs, isolated per environment.
+- **Pre-flight cleanup (handoff §gotcha 11):** broken `hermes-gateway` user-mode unit on staging (failed since 2026-06-18 with wrong venv `/home/ubuntu/hermes-venv/bin/python`) replaced with canonical from `deploy/systemd/hermes-gateway.service` + `TERMINAL_CWD=/home/ubuntu/.hermes/profiles/staging` drop-in. Orphan PID 33143 (Jun 18 09:15:53 sudo-shell origin) replaced via `gateway run --replace` semantics — no pre-kill, near-zero outage swap. New PID 58438 = unit-launched. Reboot footgun closed.
+- **`:9119` rebind (handoff §gotcha 12):** `hermes-dashboard.service` rebound from `100.112.31.24:9119` (Tailscale) to `127.0.0.1:9119` (loopback). `--insecure` flag dropped (loopback doesn't need it). SPA banner: `mode=portable` → `mode=zero-fork ... missing=[]`.
+- **Dashboard install:** `deploy-finny-dashboard.sh --instance i-0c2c974ff571162eb` (parametrization added in this PR). Built from `Postergully/finny-hermes-dashboard@main` (`b79786c9`). Loopback `:3001` 200; system unit `finny-dashboard.service` active enabled.
+- **Route53:** `dashboard.finny.staging.11mirror.com` A → `34.232.186.238`, TTL 300, zone `Z01920243UX91ZKYKCMPA`. Change `/change/C04178575KQJYGLM2SRV` INSYNC.
+- **Caddy:** appended new vhost block to `/etc/caddy/Caddyfile` on staging (existing `finny.staging.11mirror.com` block preserved). Validate clean. Reload triggered Let's Encrypt tls-alpn-01 issuance — cert obtained in ~3s.
+- **Surface smoke:** green
+  - `https://dashboard.finny.staging.11mirror.com/` → `HTTP/2 200` via Caddy with valid Let's Encrypt cert.
+  - `https://finny.staging.11mirror.com/` → `HTTP/2 404` (existing bridge behavior, not regressed).
+  - `https://dashboard.finny.prod.11mirror.com/` → 200 unchanged.
+  - Browser smoke (operator-confirmed): UI renders, model picker (`staging`), chat streams, Sessions/Skills/Config tabs populated.
+- **All multi-line file transfer used S3 + presigned URL** instead of inline heredoc-in-JSON. Avoids both the JSON-escaping fragility AND the need for `s3:GetObject` on the EC2 instance role.
+- **Snapshots for rollback:** `/tmp/hermes-gateway.service.snapshot-20260622-060025`, `/tmp/hermes-dashboard.service.snapshot-20260622-061334`, `/etc/caddy/Caddyfile.snapshot-20260622-061814`.
+- **Out of scope:** Bedrock router config swap on staging (deferred to next PR per user direction). CI build/publish for the dashboard repo (still operator-laptop driven).

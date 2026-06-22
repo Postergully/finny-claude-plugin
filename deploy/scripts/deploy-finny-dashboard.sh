@@ -25,7 +25,19 @@
 set -euo pipefail
 
 # ------- config -------
-INSTANCE_ID="i-0ef58962b09d490ee"
+INSTANCE_ID="i-0ef58962b09d490ee"  # default = prod
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --instance) INSTANCE_ID="$2"; shift 2 ;;
+    -h|--help)
+      echo "usage: $0 [--instance <ec2-instance-id>]"
+      echo "  default instance = i-0ef58962b09d490ee (prod)"
+      echo "  for staging use:   --instance i-0c2c974ff571162eb"
+      exit 0 ;;
+    *) echo "unknown flag: $1" >&2; exit 2 ;;
+  esac
+done
 BUCKET="11mirror-staging-transfer"
 S3_PREFIX="finny-dashboard"
 DASHBOARD_REPO="${HOME}/code/finny-hermes-dashboard"
