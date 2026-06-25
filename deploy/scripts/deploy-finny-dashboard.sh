@@ -107,12 +107,15 @@ pnpm --ignore-workspace build
 TARBALL="/tmp/finny-dashboard-${DASHBOARD_SHA}.tar.gz"
 log "creating tarball ${TARBALL}…"
 cd "${DASHBOARD_REPO}"
-# Ship: dist/, server-entry.js, package.json, pnpm-lock.yaml, public/, node_modules/.
-# node_modules is ~600MB — gzipped ~200MB. Acceptable for one-shot deploy.
+# Ship: dist/, server-entry.js, package.json, pnpm-lock.yaml, public/, node_modules/,
+# distribution/. node_modules is ~600MB — gzipped ~200MB. Acceptable for one-shot deploy.
+# `distribution/` carries capabilities.yaml (vendored from finny-core) which the
+# /api/capabilities route resolves at runtime via parent-directory walk. Missing
+# this directory → 500s on the route. Verified 2026-06-25.
 tar --exclude='./.git' --exclude='./.cache' --exclude='./.tmp' \
     -czf "${TARBALL}" \
     dist server-entry.js package.json pnpm-lock.yaml \
-    public node_modules pnpm-workspace.yaml 2>/dev/null
+    public node_modules pnpm-workspace.yaml distribution 2>/dev/null
 
 TARBALL_SIZE=$(du -h "${TARBALL}" | awk '{print $1}')
 log "tarball size: ${TARBALL_SIZE}"
@@ -231,7 +234,7 @@ echo "=== 3b. integrity check: required artifacts present ==="
 # Disk-full mid-extract has silently truncated tarballs in the past
 # (2026-06-25 incident: missing node_modules/@tanstack/react-router). Fail
 # fast here so the trap rolls us back to the working backup.
-for required in server-entry.js package.json node_modules/@tanstack/react-router/package.json dist; do
+for required in server-entry.js package.json node_modules/@tanstack/react-router/package.json dist distribution/capabilities.yaml; do
   if [ ! -e "\${TARGET}/\${required}" ]; then
     echo "ERROR: required artifact missing after extract: \${required}" >&2
     exit 1
