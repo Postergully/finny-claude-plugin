@@ -159,6 +159,53 @@ BAK='${BAK_DIR}'
 UNIT_PATH='/etc/systemd/system/finny-dashboard.service'
 UNIT_B64='${SYSTEMD_UNIT_B64}'
 
+# Track whether we moved the existing target aside; used by rollback trap.
+BACKUP_MADE=0
+
+rollback() {
+  echo
+  echo "=== ROLLBACK: deploy failed, restoring previous target ==="
+  if [ "\${BACKUP_MADE}" = "1" ] && [ -d "\${BAK}" ]; then
+    sudo rm -rf "\${TARGET}" || true
+    sudo mv "\${BAK}" "\${TARGET}"
+    sudo systemctl reset-failed finny-dashboard 2>/dev/null || true
+    sudo systemctl restart finny-dashboard || true
+    echo "restored \${TARGET} from \${BAK}"
+  else
+    echo "no backup to restore (first deploy or backup not made)"
+  fi
+}
+trap 'rollback' ERR
+
+echo "=== 0. pre-flight: disk space ==="
+# Tarball is ~200MB compressed but extracts to ~2.5GB. Backup of existing
+# target is another ~2.5GB. We require ≥5GB free to land safely.
+FREE_KB=\$(df --output=avail / | tail -1)
+FREE_GB=\$((FREE_KB / 1024 / 1024))
+echo "free on /: \${FREE_GB}GB"
+if [ "\${FREE_KB}" -lt 5242880 ]; then
+  echo "ERROR: <5GB free on / — refusing to deploy. Prune /opt/finny/dashboard.bak.* first." >&2
+  echo "current backups:" >&2
+  ls -lad /opt/finny/dashboard.bak.* 2>/dev/null >&2 || true
+  exit 1
+fi
+
+echo
+echo "=== 0b. pre-flight: prune old backups (keep 2 most recent) ==="
+# Retention policy: keep only the 2 newest dashboard.bak.* dirs. Anything older
+# is dead weight that has caused the disk to fill in the past (2026-06-25 incident).
+OLD_BAKS=\$(ls -1dt /opt/finny/dashboard.bak.* 2>/dev/null | tail -n +3 || true)
+if [ -n "\${OLD_BAKS}" ]; then
+  echo "pruning:"
+  echo "\${OLD_BAKS}"
+  echo "\${OLD_BAKS}" | xargs -r sudo rm -rf
+else
+  echo "no backups to prune"
+fi
+# Also remove any leftover .broken.* dirs from prior failed deploys.
+sudo rm -rf /opt/finny/dashboard.broken.* 2>/dev/null || true
+
+echo
 echo "=== 1. download tarball (presigned URL, no IAM dep) ==="
 sudo -u ubuntu curl -fsSL -o /tmp/finny-dashboard.tgz "\${PRESIGNED_URL}"
 ls -lh /tmp/finny-dashboard.tgz
@@ -168,6 +215,7 @@ echo "=== 2. backup existing /opt/finny/dashboard if any ==="
 if [ -d "\${TARGET}" ]; then
   echo "found existing target — moving to \${BAK}"
   sudo mv "\${TARGET}" "\${BAK}"
+  BACKUP_MADE=1
 else
   echo "no existing target — first deploy"
 fi
@@ -177,6 +225,19 @@ echo "=== 3. extract ==="
 sudo -u ubuntu mkdir -p "\${TARGET}"
 sudo -u ubuntu tar -xzf /tmp/finny-dashboard.tgz -C "\${TARGET}"
 sudo chown -R ubuntu:ubuntu "\${TARGET}"
+
+echo
+echo "=== 3b. integrity check: required artifacts present ==="
+# Disk-full mid-extract has silently truncated tarballs in the past
+# (2026-06-25 incident: missing node_modules/@tanstack/react-router). Fail
+# fast here so the trap rolls us back to the working backup.
+for required in server-entry.js package.json node_modules/@tanstack/react-router/package.json dist; do
+  if [ ! -e "\${TARGET}/\${required}" ]; then
+    echo "ERROR: required artifact missing after extract: \${required}" >&2
+    exit 1
+  fi
+done
+echo "all required artifacts present"
 
 echo
 echo "=== 4. write .env ==="
@@ -247,6 +308,9 @@ echo
 echo "=== DEPLOY DONE ==="
 echo "loopback: OK"
 echo "next: FF /opt/finny deployed branch + reload caddy → public URL works"
+
+# Disarm the rollback trap on success.
+trap - ERR
 REMOTE_EOF
 )
 
