@@ -8,25 +8,30 @@
 
 ---
 
-## Pre-Phase-1 cleanup status (from 2026-06-29 infra audit)
+## Pre-Phase-1 cleanup status — ✅ COMPLETE 2026-06-29
 
-| Item | State | Blocks Phase 1? |
+| Item | State | Notes |
 |---|---|---|
-| Bridge OneLogin OIDC salvage ([finny-claude-plugin#23](https://github.com/Postergully/finny-claude-plugin/pull/23)) | Draft, pending Phase-3 IdP decision | No |
-| Brain cron-corrections + .gitignore overhaul ([finny-hermes-config#3](https://github.com/Postergully/finny-hermes-config/pull/3)) | Open for review | **Yes** — prod must be at known-clean state before staging mirror |
-| Phase 2 pre-flight manifests ([finny-claude-plugin#24](https://github.com/Postergully/finny-claude-plugin/pull/24)) | Open for review | No |
-| stagesnap-20260617-182341 profile (444MB) | ✅ Deleted | No |
-| `system_prompt.py.bak-v3probe` on staging | Pending discard during refresh §0 | No — handled in Task 1.1 |
+| Bridge OneLogin OIDC salvage ([finny-claude-plugin#23](https://github.com/Postergully/finny-claude-plugin/pull/23)) | Draft, parked | Pending Phase-3 IdP decision (OneLogin vs Zitadel). Does not block Phase 1. |
+| Brain cron-corrections + .gitignore overhaul ([finny-hermes-config#3](https://github.com/Postergully/finny-hermes-config/pull/3)) | ✅ Merged + deployed | Merge `29f98ef` to main, `deployed` fast-forwarded, prod pulled, gateway restarted, smoke test 5/5 parity with staging |
+| Phase 2 pre-flight manifests ([finny-claude-plugin#24](https://github.com/Postergully/finny-claude-plugin/pull/24)) | ✅ Merged | `2e65017` |
+| Phase 1 progress tracker ([finny-claude-plugin#25](https://github.com/Postergully/finny-claude-plugin/pull/25)) | ✅ Merged | `53dd2c4` — this very doc |
+| stagesnap-20260617-182341 profile (444MB) | ✅ Deleted | `hermes profile delete` 2026-06-29 |
+| `system_prompt.py.bak-v3probe` on staging | Pending | Handled in Task 1.1 §0 cleanup |
+| 8 follow-up issues filed in finny-hermes-config | ✅ Issues #4–#11 | See [Issues #4-#11 in finny-hermes-config](https://github.com/Postergully/finny-hermes-config/issues) |
 
-## Operator checklist before Task 1.1 starts
+## Deploy verification (2026-06-29, post-merge of #3)
 
-- [ ] Review + merge [finny-hermes-config#3](https://github.com/Postergully/finny-hermes-config/pull/3) to `main`
-- [ ] Fast-forward `deployed` branch of finny-hermes-config to merge commit
-- [ ] On prod via SSM: `cd ~/.hermes && git pull --ff-only origin deployed` — verify clean working tree (only ignored files visible)
-- [ ] Restart `hermes-gateway.service` user unit on prod — verify health
-- [ ] Review + merge [finny-claude-plugin#24](https://github.com/Postergully/finny-claude-plugin/pull/24) (manifests) — non-blocking, but tidies the docs index
+- Prod EC2 `i-0ef58962b09d490ee` at `~/.hermes` HEAD = `29f98ef`
+- atomic_fetch.py = 352 lines (PR version)
+- resolver.md = 1613 lines (PR version)
+- Working tree clean (0 modified, 0 deleted, 0 untracked) — .gitignore overhaul working as intended
+- Memory files (MEMORY.md, USER.md, .curator_state, .usage.json) preserved on disk per design
+- Gateway `/health` = `{"status":"ok"}`, bridge `/ready` = `{"ok":true,"hermes":"reachable","latency_ms":6}`
+- Zero errors in journal last 2 min post-restart
+- 5/5 smoke queries return matching intent/resolver-hit patterns to staging worktree
 
-Once these check, Task 1.1 begins.
+**Phase 1 Task 1.1 starts here.**
 
 ---
 
@@ -240,6 +245,22 @@ When all of these check, Phase 1 is closed and Phase 2 can begin (see `finny-cor
 | 2026-06-29 | Block Phase 1 on finny-hermes-config#3 merge | Prod is not at known-clean state until that lands; refresh-during-deploy is the failure mode the plan warns about |
 | 2026-06-29 | iptables drift = expected (Tailscale) | Subagent investigation; staging has Tailscale chains because dashboard binds tailnet IP, prod does not |
 | 2026-06-29 | `feat-bridge-oidc-onelogin` Draft, decision deferred to Phase 3 | OneLogin vs Zitadel v1 IdP question; Phase 3 owns authz substrate |
+| 2026-06-29 | Deploy PR #3 to prod with stash-pull-restore for cron/jobs.json | Discovered cron/jobs.json is runtime-drift (written by cron tick) but was tracked. Stashed local, pulled, dropped stash. Filed as issue #11. |
+| 2026-06-29 | Restart gateway after pull on prod | config.yaml skill disables (airtable, github-issues, godmode) need gateway restart to take effect |
+
+## Activity log
+
+| Date / Time UTC | What happened |
+|---|---|
+| 2026-06-29 03:32 | Pre-flight infra diff captured between prod (`i-0ef58962b09d490ee`) and staging (`i-0c2c974ff571162eb`) via parallel SSM. iptables drift resolved via subagent (= Tailscale, expected). |
+| 2026-06-29 04:04 | OneLogin OIDC salvage commit `638730e` on prod, bundle-transferred via SSM port-forward, pushed to origin as `feat/bridge-oidc-onelogin`, Draft PR #23 opened. |
+| 2026-06-29 04:14 | `hermes profile delete stagesnap-20260617-182341` on prod — 444MB reclaimed. |
+| 2026-06-29 04:30 | Brain cron-corrections commit `129d198` on prod (95 files, +12169/-985). Manifest added 2026-06-29 ~05:00 after review feedback. PR #3 opened then updated. |
+| 2026-06-29 05:00 | PR #3 merged to main (`29f98ef`). |
+| 2026-06-29 05:03 | PRs #24 + #25 merged to main (`2e65017`, `53dd2c4`). |
+| 2026-06-29 05:05 | 7 follow-up issues filed in finny-hermes-config (#4–#10). |
+| 2026-06-29 05:10 | `deployed` fast-forwarded to `29f98ef`. Prod pulled (with stash for cron/jobs.json). Gateway restarted. Smoke test 5/5 parity. Issue #11 filed for cron/jobs.json drift. |
+| **NEXT** | Phase 1 Task 1.1 — refresh staging |
 
 ## References
 
