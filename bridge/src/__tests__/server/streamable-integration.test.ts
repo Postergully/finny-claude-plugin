@@ -38,7 +38,8 @@ beforeAll(async () => {
   // Set to 'test' and route the access-log SQLite to a tmpdir so CI doesn't
   // try to mkdir under /opt/deployments (read-only on CI runners).
   process.env.ENV = process.env.ENV ?? 'test';
-  process.env.ACCESS_DB_DIR = process.env.ACCESS_DB_DIR ?? path.join(os.tmpdir(), 'finny-mcp-test-access-db');
+  process.env.ACCESS_DB_DIR =
+    process.env.ACCESS_DB_DIR ?? path.join(os.tmpdir(), 'finny-mcp-test-access-db');
 
   // Probe a free port by letting Node's HTTP server pick one, then close it.
   const probe = http.createServer();
