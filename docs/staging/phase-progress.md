@@ -257,7 +257,7 @@ Phase 1 closed (with deferred sub-tasks tracked). Phase 2 in progress.
 | # | Task | Repo | PR | Status |
 |---|---|---|---|---|
 | 2.1 | Extract SOUL.md from AGENTS.md (additive) | finny-hermes-config | [#12](https://github.com/Postergully/finny-hermes-config/pull/12) | ✅ Open for review |
-| 2.2 | Runtime loader merge (SOUL + AGENTS, [invariant] precedence) | finny-hermes | — | Next |
+| 2.2 | Runtime loader merge (SOUL + AGENTS, [invariant] precedence) | finny-hermes | [#9](https://github.com/Postergully/finny-hermes/pull/9) | ✅ PR open, awaiting smoke + merge + deploy + activation |
 | 2.3 | Per-UID hardening for client-admin profile | finny-hermes-config | — | Pending |
 | 2.4 | SuiteQL parameterization at the bridge | finny-claude-plugin | — | Pending |
 
@@ -271,9 +271,35 @@ Additive multi-tenant layout. Root files byte-identical (no runtime change). New
 Manifest: `finny-hermes-config/docs/staging/soul-agents-split-changes.md`.
 Deploy is safe (additive). No restart needed. Loader still reads root files.
 
-### Task 2.2 (next) — loader change in finny-hermes
+### Task 2.2 — shipped 2026-06-29
 
-Per plan L778-826. Find `AGENTS.md` loader in `finny-hermes` Python (likely `hermes_agent/context_loader.py`). Add SOUL+AGENTS concatenation with `[invariant]` conflict detection. Write 2 pytest cases (load order, conflict raises). After this ships, root SOUL.md + AGENTS.md can be deleted in a follow-up PR.
+Per plan L778-826 (with 2026-06-29 amendment — see decision log below).
+
+PR: [finny-hermes#9](https://github.com/Postergully/finny-hermes/pull/9) @ `0231263` on branch `soul-agents-merge`.
+
+**What landed:**
+- New `InvariantConflict` exception in `agent/prompt_builder.py`
+- Pure `_merge_invariants(soul, overlay) -> str` (string in, string out — no I/O)
+- Extended `load_soul_md()` with conditional `FINNY_OVERLAY_PATH` env-var branch
+- Untouched: `_load_agents_md`, `build_context_files_prompt`, fallback chain (verified byte-identical via diff)
+- Tests: 9 new pass + 123 existing pass
+- Diff: 284 insertions across 2 files
+
+**Spec amendment that landed in the implementation:**
+- Loader does NOT live in `hermes_agent/context_loader.py` (plan pseudocode was wrong). Real location: `agent/prompt_builder.py:1300-1448`
+- Topology was NOT `load_context(soul, agents)` — actual loader uses `load_soul_md()` zero-arg + `_load_agents_md(cwd)` single-arg with a first-match-wins fallback chain
+- Task 2.2 became ADDITIVE rather than replacement: extended `load_soul_md()` instead of replacing the topology
+- Feature-flagged via `FINNY_OVERLAY_PATH` env var — default (unset) preserves byte-identical pre-PR behavior for upstream Hermes users
+- `[invariant]` conflict semantics: SOUL is authoritative over the **entire** `[invariant]` namespace. Overlays can only echo verbatim (silent dedupe); ANY new or changed `[invariant]` line in overlay raises `InvariantConflict`. Stricter than the plan's "duplicate keys raise" phrasing — worker's judgment call confirmed by operator.
+
+**Operator-owned cutover steps:**
+1. Staging smoke per PR body (gateway restart + journal scan, no errors in 5 min window)
+2. Merge `finny-hermes#9` to main
+3. Bundled deploy of finny-hermes-config (3 commits pending: PR #12 SOUL/AGENTS split + manifests + tracker update) + finny-hermes (PR #9 loader) together
+4. Set `FINNY_OVERLAY_PATH=/home/ubuntu/.hermes/client-overlays/sharechat/AGENTS.md` in staging gateway systemd unit / profile `.env` to ACTIVATE the overlay
+5. Verify activation: cowork query against staging should reflect merged SOUL+overlay content
+6. **Sidequest while SSM'd in:** fix [finny-hermes-config#11](https://github.com/Postergully/finny-hermes-config/issues/11) (cron/jobs.json runtime drift — gitignore it) — small scope, big QoL win, prevents future deploy-pull friction
+7. Update this tracker marking 2.2 fully closed + activation step logged
 
 ### Task 2.3 — per-UID hardening
 
@@ -300,6 +326,9 @@ Per plan L910-965. Create `bridge/src/intents/suiteql-guard.ts` with `sanitizeSu
 | 2026-06-29 | Phase 2 Task 2.1 — additive only, no root file changes | Root SOUL.md + AGENTS.md are loaded by current gateway. Moving them breaks staging until Task 2.2 loader change ships. Split files into `common-infra/` + `client-overlays/sharechat/` alongside root; root deleted after Task 2.2 ships. |
 | 2026-06-29 | Envelope contract → SOUL.md (platform invariant) | Envelope shape is enforced by the bridge regardless of client. All future multi-tenant clients use the same envelope. Goes in SOUL, not AGENTS. |
 | 2026-06-29 | Mandatory first-call rule → SOUL.md, script path → AGENTS.md | The *requirement* to run a first-call script is platform-invariant (skipping costs 14s + risks hallucinated imports). The *specific script* (atomic_fetch.py path, payload shape) is client-specific. |
+| 2026-06-29 | Task 2.2 — additive `FINNY_OVERLAY_PATH` extension, not loader replacement | Plan pseudocode (`load_context(soul, agents)`) didn't match real `finny-hermes` topology (`load_soul_md()` + `_load_agents_md(cwd)` with fallback chain). Replacement would silently change prompt shape for every upstream Hermes user. Feature-flagged opt-in preserves byte-identical default behavior. |
+| 2026-06-29 | Task 2.2 — `[invariant]` namespace is SOUL-authoritative | Plan said "duplicate keys raise on conflict" but didn't cover new-key-in-overlay case. Worker chose stricter "overlays can only echo verbatim; any new or changed `[invariant]` line raises `InvariantConflict`." Operator confirmed: invariants are platform-level (Neuu Labs domain); allowing overlays to add invariants would let clients elevate tenant-specific behavior to platform-immutable status, breaking the layering model. Future extension if needed: namespaced invariants like `[invariant tenant:<client>]`. |
+| 2026-06-29 | **Process rule: locate-the-function preflight for finny-hermes Python tasks** | Phase 2-9 tasks that modify `finny-hermes` Python MUST include a preflight step BEFORE worker dispatch: (a) file path of target function, (b) actual signature copy-pasted from source, (c) caller inventory via `grep -rn`, (d) test path. Plan pseudocode is no longer sufficient — must be reality-grounded. Triggered by the Task 2.2 halt-and-rescope cycle (signal `verifier-spec-vs-reality-conflation` went 2→3). Saves the loop a strike on every future Python task. |
 
 ## Activity log
 
@@ -317,7 +346,22 @@ Per plan L910-965. Create `bridge/src/intents/suiteql-guard.ts` with `sanitizeSu
 | 2026-06-29 05:24 | Operator ran query 1 ("vendor balance for Google Cloud India") — correct answer, but gateway log showed Finny tried 4 hallucinated `netsuite_kb` imports before recovering. atomic_fetch.py NOT called as first tool. Investigation: AGENTS.md mandate is present (line 109) but agent chose not to follow. Filed as instruction-following gap (not infra). |
 | 2026-06-29 ~05:50 | Phase 1.2/1.3/1.4 (eval canonical queries + capture + CI) **deferred** per operator decision to a dedicated eval-build session. Phase 2 unblocked. |
 | 2026-06-29 06:00 | Phase 2 Task 2.1 — SOUL/AGENTS split shipped additively. `common-infra/SOUL.md` (154 lines, 18 `[invariant]` tags), `common-infra/README.md`, `client-overlays/sharechat/AGENTS.md` (89 lines = 46% of original). Root files byte-identical. Verifier rubric all PASS. PR finny-hermes-config#12 open. |
-| **NEXT** | Phase 2 Task 2.2 — loader change in `finny-hermes` Python (read SOUL+AGENTS, merge with `[invariant]` precedence, raise `InvariantConflict` on conflict). After 2.2 ships, root SOUL.md / AGENTS.md can be deleted. |
+| 2026-06-29 (later) | Phase 2 Task 2.2 dispatched, worker halted at locate-the-function step (plan pseudocode `load_context(soul, agents)` didn't match real `finny-hermes` topology). Spec amendment landed: additive `FINNY_OVERLAY_PATH` extension, namespace-locked `[invariant]` conflict rule, locate-the-function preflight rule added to decision log. Worker resumed on amended spec. |
+| 2026-06-29 (later) | Phase 2 Task 2.2 shipped — finny-hermes#9 @ `0231263` on `soul-agents-merge`. 284 insertions across 2 files, 9 new tests + 123 existing pass. Awaiting operator-owned: staging smoke → merge → bundled deploy with finny-hermes-config 3-commit backlog → set `FINNY_OVERLAY_PATH` to activate overlay. |
+| **NEXT** | Operator-owned cutover for Task 2.2 (steps 1-7 in Task 2.2 section above). Then **Task 2.3 — per-UID hardening** in finny-hermes-config. Task 2.4 (SuiteQL guard at bridge) can run in parallel since it's independent. |
+
+## Phase 2 → Phase 3 transition gate
+
+Before Phase 3 begins (Distr packaging + Setup view + Zitadel), the following MUST close:
+
+- [ ] Phase 0 — eval canonical query set (Task 0.1) defined + checked into repo
+- [ ] Phase 1.2 — oracle envelopes captured from staging
+- [ ] Phase 1.3 — baseline eval 100% pass on staging
+- [ ] Phase 1.4 — eval-staging CI workflow nightly + per-PR
+
+**Why:** The HTML spec (`docs/superpowers/specs/2026-06-23-finny-multitenant-architecture.html` v3.1) puts the eval-set parity gate at **Spec Phase 1 exit**. Plan deferred Phase 1.2-1.4 to fit a Phase 2 implementation window, but spec Phase 2 ("Parallel Change on staging") and Phase 3 ("Synthetic 2nd tenant") both have explicit gates that require the eval set to exist ("ShareChat eval set still 100% green" / "Both eval sets green simultaneously"). Phase 3 is where Zitadel + Distr packaging land — architectural complexity jumps significantly. Catching parity regressions at that boundary without the eval scaffold is much harder than catching them at the Task 2.2/2.3/2.4 boundary.
+
+**Forcing function:** Plan Phases 2.3 and 2.4 may ship without the eval set (operator decision 2026-06-29). Plan Phase 3 may NOT start without it. Phase 2 → Phase 3 is the latest viable window to author the eval set.
 
 ## References
 
