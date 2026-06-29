@@ -214,7 +214,10 @@ export async function createHttpServer(
           jwks_uri: discovery.jwks_uri,
           scopes_supported: discovery.scopes_supported || ['openid', 'profile', 'email'],
           response_types_supported: discovery.response_types_supported || ['code'],
-          grant_types_supported: discovery.grant_types_supported || ['authorization_code', 'refresh_token'],
+          grant_types_supported: discovery.grant_types_supported || [
+            'authorization_code',
+            'refresh_token',
+          ],
           code_challenge_methods_supported: discovery.code_challenge_methods_supported || ['S256'],
           token_endpoint_auth_methods_supported: ['none'],
           revocation_endpoint: discovery.revocation_endpoint,
@@ -240,34 +243,48 @@ export async function createHttpServer(
         res.redirect(302, target.toString());
       } catch (err) {
         logError('Authorize proxy error', err);
-        res.status(502).json({ error: 'authorize_proxy_error', error_description: 'Failed to reach authorization endpoint' });
+        res.status(502).json({
+          error: 'authorize_proxy_error',
+          error_description: 'Failed to reach authorization endpoint',
+        });
       }
     });
 
     // Token proxy — strips `resource`/`audience` and forwards to the real token endpoint.
-    app.post(tokenProxyPath, express.urlencoded({ extended: false }), express.json(), async (req: Request, res: Response) => {
-      try {
-        const discovery = await getOidcDiscovery(oidcIssuer);
-        const body = req.body as Record<string, string> | undefined;
-        const params = new URLSearchParams();
-        if (body && typeof body === 'object') {
-          for (const [key, value] of Object.entries(body)) {
-            if (key === 'resource' || key === 'audience') continue;
-            if (typeof value === 'string') params.set(key, value);
+    app.post(
+      tokenProxyPath,
+      express.urlencoded({ extended: false }),
+      express.json(),
+      async (req: Request, res: Response) => {
+        try {
+          const discovery = await getOidcDiscovery(oidcIssuer);
+          const body = req.body as Record<string, string> | undefined;
+          const params = new URLSearchParams();
+          if (body && typeof body === 'object') {
+            for (const [key, value] of Object.entries(body)) {
+              if (key === 'resource' || key === 'audience') continue;
+              if (typeof value === 'string') params.set(key, value);
+            }
           }
+          const tokenRes = await fetch(discovery.token_endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString(),
+          });
+          const tokenData = await tokenRes.text();
+          res
+            .status(tokenRes.status)
+            .set('Content-Type', tokenRes.headers.get('content-type') || 'application/json')
+            .send(tokenData);
+        } catch (err) {
+          logError('Token proxy error', err);
+          res.status(502).json({
+            error: 'token_proxy_error',
+            error_description: 'Failed to reach token endpoint',
+          });
         }
-        const tokenRes = await fetch(discovery.token_endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: params.toString(),
-        });
-        const tokenData = await tokenRes.text();
-        res.status(tokenRes.status).set('Content-Type', tokenRes.headers.get('content-type') || 'application/json').send(tokenData);
-      } catch (err) {
-        logError('Token proxy error', err);
-        res.status(502).json({ error: 'token_proxy_error', error_description: 'Failed to reach token endpoint' });
       }
-    });
+    );
 
     // DCR proxy — returns the static client_id for MCP clients that attempt registration
     app.post('/oauth/register', express.json(), (_req: Request, res: Response) => {

@@ -62,12 +62,11 @@ export async function createOidcVerifier(config: OidcProviderConfig) {
         });
 
         const sub = (payload.sub as string) || 'unknown';
-        const scopes = typeof payload.scope === 'string'
-          ? payload.scope.split(' ').filter(Boolean)
-          : [];
+        const scopes =
+          typeof payload.scope === 'string' ? payload.scope.split(' ').filter(Boolean) : [];
 
         const groups = Array.isArray(payload.groups)
-          ? payload.groups as string[]
+          ? (payload.groups as string[])
           : typeof payload.groups === 'string'
             ? [payload.groups]
             : [];

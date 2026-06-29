@@ -9,7 +9,8 @@ export function initAccessDb(env: string): void {
   if (!env) {
     throw new Error('ENV must be set to initialize access database');
   }
-  const dbDir = `/opt/deployments/${env}/bridge/data`;
+  // Allow tests + non-standard deploy targets to override the default path.
+  const dbDir = process.env.ACCESS_DB_DIR ?? `/opt/deployments/${env}/bridge/data`;
   fs.mkdirSync(dbDir, { recursive: true });
   const dbPath = path.join(dbDir, 'bridge_access_logs.db');
 
