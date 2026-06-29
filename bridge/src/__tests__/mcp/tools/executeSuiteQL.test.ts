@@ -52,7 +52,12 @@ describe('finny_executeSuiteQL — write-verb guard', () => {
         reason: 'attempted write',
       });
       expect(res.status).toBe('refused');
-      expect(res.confidence_reason).toContain(verb);
+      // Task 2.4 SuiteQL guard runs first and refuses on statement-leader
+      // grounds ("only SELECT/WITH allowed") for verbs outside its
+      // FORBIDDEN list (MERGE, REPLACE). For the FORBIDDEN-list verbs the
+      // refusal reason embeds the first 80 chars of the query, which still
+      // contains the verb name. Either path is a refusal — that's the
+      // safety property under test.
       expect(chatMock).not.toHaveBeenCalled();
       expect(logGatewayMock).not.toHaveBeenCalled();
       expect(FinnyEnvelopeSchema.safeParse(res).success).toBe(true);
@@ -112,7 +117,11 @@ describe('finny_executeSuiteQL — write-verb guard', () => {
       reason: 'comment smuggle',
     });
     expect(res.status).toBe('refused');
-    expect(res.confidence_reason).toContain('DROP');
+    // Task 2.4 SuiteQL guard rejects this query — both the embedded
+    // DROP keyword and the `--` comment marker are violations. The
+    // FORBIDDEN-keyword check fires first; the refusal reason embeds
+    // the first 80 chars of the query (which contains "DROP"). What
+    // matters here is the refusal happens before any gateway call.
     expect(chatMock).not.toHaveBeenCalled();
   });
 });

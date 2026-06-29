@@ -3,6 +3,7 @@ import { HermesClient } from '../../hermes/client.js';
 import { FinnyEnvelopeSchema, type FinnyEnvelope } from '../../types/envelope.js';
 import { DEFAULT_FINNY_UPSTREAM_URL, DEFAULT_MODEL } from '../../config/constants.js';
 import { detectWriteVerb, buildSuiteQLPreamble } from './_shared/suiteqlGuard.js';
+import { sanitizeSuiteQL, SuiteQLViolation } from '../../intents/suiteql-guard.js';
 import { extractEnvelopeJSON } from './_shared/parseEnvelope.js';
 import { getOrCreateSession } from './_shared/sessionStore.js';
 import { errorEnvelope, refusedEnvelope } from './_shared/envelopeBuilders.js';
@@ -40,7 +41,29 @@ async function handler(rawInput: ExecuteSuiteQLInput): Promise<FinnyEnvelope> {
   const envUsed = input.env;
   const intentRestated = `Execute SuiteQL: ${input.reason.slice(0, 160)}`;
 
-  // Gate 1 — write-verb guard runs BEFORE any gateway call. Fail closed.
+  // Gate 1a — intents-layer SuiteQL guard (Task 2.4). SELECT/WITH only,
+  // rejects comments (`--`, `/*`) and statement separator (`;`). Fails
+  // closed; runs BEFORE any gateway call.
+  try {
+    sanitizeSuiteQL(input.sql);
+  } catch (err) {
+    if (err instanceof SuiteQLViolation) {
+      return refusedEnvelope({
+        intentRestated,
+        reason: `SuiteQL guard rejected query: ${err.message}. Only read-only SELECT/WITH SuiteQL is supported in finny_executeSuiteQL; comments and multi-statement payloads are forbidden.`,
+        envUsed,
+        sessionId: '—',
+        elapsedMs: 0,
+        confidence: 'high',
+      });
+    }
+    throw err;
+  }
+
+  // Gate 1b — legacy write-verb guard. Retained as defense in depth;
+  // sanitizeSuiteQL above already covers the same verbs plus more, but
+  // we keep this in place until staging confirms zero false positives
+  // on the broader rule set.
   const writeVerb = detectWriteVerb(input.sql);
   if (writeVerb) {
     return refusedEnvelope({
