@@ -1,0 +1,91 @@
+name: Eval (staging)
+
+# Runs the canonical-query eval against the staging bridge.
+# - Nightly at 06:00 UTC (catches drift even when no PRs are open).
+# - On PRs that touch bridge/, plugin/, eval/, or this workflow file.
+# - Manually via the Actions tab (workflow_dispatch).
+#
+# Required repo secrets:
+#   STAGING_MCP_URL    — base URL of the staging bridge (e.g. https://finny.staging.11mirror.com/mcp).
+#                        Mandatory; the workflow exits non-zero if unset.
+#   STAGING_EVAL_TOKEN — bearer token if staging requires auth. Optional; if unset
+#                        the eval runs anonymously (some staging endpoints may allow this).
+#                        Add under Repo Settings → Secrets and variables → Actions.
+#
+# Why pull_request, not pull_request_target:
+#   pull_request_target would expose STAGING_MCP_URL / STAGING_EVAL_TOKEN to forked-repo
+#   PRs. Using pull_request keeps the secret available only to PRs from branches in this
+#   repo (which is what we want — outside contributors should not hit our staging bridge).
+#
+# Hard-fail on missing oracle is intentional: until Task 1.2 captures eval/oracle/*,
+# every run will go red. That is the signal to land oracle capture before flipping
+# this workflow's required-status gate.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  pull_request:
+    paths:
+      - 'bridge/**'
+      - 'plugin/**'
+      - 'eval/**'
+      - '.github/workflows/eval-staging.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eval-staging-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eval:
+    name: Eval against staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify STAGING_MCP_URL secret is set
+        env:
+          STAGING_MCP_URL: ${{ secrets.STAGING_MCP_URL }}
+        run: |
+          if [ -z "${STAGING_MCP_URL}" ]; then
+            echo "::error::STAGING_MCP_URL secret is not configured. Add it under Repo Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run eval against staging
+        env:
+          FINNY_EVAL_TOKEN: ${{ secrets.STAGING_EVAL_TOKEN }}
+          STAGING_MCP_URL: ${{ secrets.STAGING_MCP_URL }}
+        run: |
+          pnpm eval \
+            --target "$STAGING_MCP_URL" \
+            --oracle eval/oracle \
+            --queries eval/canonical-queries.json \
+            --out eval-result.json
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: eval-result
+          path: eval-result.json
+          retention-days: 14
