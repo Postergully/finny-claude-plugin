@@ -9,7 +9,7 @@
 | Phase | Status | Notes |
 |---|---|---|
 | **Phase 1 — Staging parity** | 🟡 Partial complete | Task 1.1 done; 1.2/1.3/1.4 (eval set) deferred to a dedicated session |
-| **Phase 2 — SOUL/AGENTS split + per-UID hardening** | 🟢 In progress | Task 2.1 PR open (finny-hermes-config#12); 2.2/2.3/2.4 next |
+| **Phase 2 — SOUL/AGENTS split + per-UID hardening** | ✅ Implementation complete on staging | All 4 tasks merged + deployed to staging. 24h soak window started 2026-06-29 13:23 UTC. Prod deploy deferred (operator decision). |
 
 **Phase 1 gate:** Staging refreshed from current prod snapshot · oracle envelopes captured (deferred) · eval 100% pass (deferred) · CI workflow (deferred). 1.1 alone is enough to unblock Phase 2.
 
@@ -258,8 +258,8 @@ Phase 1 closed (with deferred sub-tasks tracked). Phase 2 in progress.
 |---|---|---|---|---|
 | 2.1 | Extract SOUL.md from AGENTS.md (additive) | finny-hermes-config | [#12](https://github.com/Postergully/finny-hermes-config/pull/12) | ✅ Merged + live on staging |
 | 2.2 | Runtime loader merge (SOUL + AGENTS, [invariant] precedence) | finny-hermes | [#9](https://github.com/Postergully/finny-hermes/pull/9) | ✅ Merged + activated + verified on staging (FINNY_OVERLAY_PATH live) |
-| 2.3 | Per-UID hardening for client-admin profile | finny-hermes-config | — | ⏳ Loop dispatched (parallel with 2.4) |
-| 2.4 | SuiteQL parameterization at the bridge | finny-claude-plugin | — | ⏳ Loop dispatched (parallel with 2.3) |
+| 2.3 | Per-UID hardening for client-admin profile | finny-hermes-config | [#13](https://github.com/Postergully/finny-hermes-config/pull/13) | ✅ Merged + deployed on staging (8/8 rubric checks) |
+| 2.4 | SuiteQL parameterization at the bridge | finny-claude-plugin | [#34](https://github.com/Postergully/finny-claude-plugin/pull/34) | ✅ Merged + deployed on staging |
 
 ### Task 2.1 — completed 2026-06-29
 
@@ -305,13 +305,49 @@ PR: [finny-hermes#9](https://github.com/Postergully/finny-hermes/pull/9) @ `0231
 
 **What this proves:** SOUL+AGENTS runtime merge is live and verified end-to-end on staging. Platform invariants (envelope contract, dual-bank rule, security boundaries) flow through SOUL; client specifics (tenant context, NetSuite account, atomic_fetch path) flow through overlay. Both reach Finny's working context with no conflicts at startup.
 
-### Task 2.3 — per-UID hardening
+### Task 2.3 — per-UID hardening — completed 2026-06-29
 
-Per plan L830-907. New system user per profile (`hermes-sharechat`), chown profile dir 0700, .env 0600, systemd template `finny-profile@.service` with `ProtectSystem=strict NoNewPrivileges=yes`, iptables OWNER egress allowlist. Cross-UID `cat .env` must return Permission denied.
+PR: [finny-hermes-config#13](https://github.com/Postergully/finny-hermes-config/pull/13) merged @ `5b3c6c1`.
 
-### Task 2.4 — SuiteQL guard at bridge
+**What landed:**
+- `scripts/harden-profile-uid.sh` — idempotent per-profile hardening (creates `hermes-<profile>` system user, locks profile dir to `0700` and `.env` to `0600`, ensures `FINNY_EGRESS` iptables chain exists, appends OUTPUT OWNER rule)
+- `systemd/finny-profile@.service` — system-scope template unit with `User=hermes-%i`, `ProtectSystem=strict`, `NoNewPrivileges`, `PrivateTmp`, `MemoryDenyWriteExecute`, pinned to uv-managed venv at `~/.hermes/hermes-agent/venv/bin/python`, sets `FINNY_OVERLAY_PATH` per profile so Task 2.2 loader merges the right overlay
+- Manifest: `docs/staging/per-uid-hardening-changes.md` in finny-hermes-config
 
-Per plan L910-965. Create `bridge/src/intents/suiteql-guard.ts` with `sanitizeSuiteQL()` — allow SELECT/WITH only, reject DDL/DML keywords, reject `;`/`--`/`/*`. Wire into every SuiteQL call site in bridge. 6 unit tests.
+**Verifier rubric — 8/8 PASS on staging:**
+- [x] Profile dir mode + owner = `hermes-staging 700`
+- [x] Cross-UID read denied (sudo -u nobody → Permission denied)
+- [x] FINNY_EGRESS chain exists (2 references — uid 997 sharechat + uid 995 staging)
+- [x] OUTPUT jump rule for hermes-staging uid 995 present
+- [x] hermes-gateway.service still active (template runs alongside, no cutover)
+- [x] No gateway journal errors in 5 min post-install
+- [x] finny-profile@ template not yet enabled (additive, not cutover)
+- [x] Idempotent re-run (rule count stays at 1 per uid)
+
+**Caveat:** staging profile has no profile-local `.env` (inherits parent `~/.hermes/.env`). Script handled this with a `warn: skipping chmod` and continued. Cross-UID dir read is still denied. The parent admin `.env` at `~/.hermes/.env` (owned by `ubuntu`) is OUT of this task's scope — addressed in a future cutover task.
+
+### Task 2.4 — SuiteQL guard at bridge — completed 2026-06-29
+
+PR: [finny-claude-plugin#34](https://github.com/Postergully/finny-claude-plugin/pull/34) merged @ `2ad79b0e3`.
+
+**What landed:**
+- `bridge/src/intents/suiteql-guard.ts` — 66 lines. `sanitizeSuiteQL(q)` allows SELECT and WITH only, rejects DDL/DML keywords (DROP, DELETE, UPDATE, INSERT, TRUNCATE, ALTER, CREATE, GRANT, REVOKE, EXEC), rejects `;`, `--`, `/*`. Throws `SuiteQLViolation` with error truncated to first 80 chars
+- `bridge/src/intents/suiteql-guard.test.ts` — 86 lines, 6 test cases per plan L922-930
+- Wired into every SuiteQL call site in `bridge/src/`
+- Manifest: `docs/staging/feat-suiteql-guard-changes.md`
+
+**Verifier rubric (all PASS):**
+- [x] All 6 unit tests pass (verified via PR CI: 4/4 ubuntu+macos jobs green)
+- [x] Every SuiteQL call site wraps with sanitizeSuiteQL
+- [x] Tests cover `;`, `--`, multi-statement, all forbidden keywords case-insensitive
+- [x] Errors don't leak query content beyond 80 chars
+- [x] `pnpm -C bridge check:all` passes (lint, typecheck, test, build)
+
+**Staging deploy required two systemd drop-in fixes (filed as known limitations):**
+1. `ENV` env var not set in finny-mcp.service — added `Environment=ENV=staging` to `/etc/systemd/system/finny-mcp.service.d/env-staging.conf`
+2. `ACCESS_DB_DIR` defaults to `/opt/deployments/$ENV/bridge/data` (unwritable by ubuntu user) — added `Environment=ACCESS_DB_DIR=/var/lib/finny-mcp/bridge-access-db` (writable, mode 0700, owned by ubuntu)
+
+Both fixes will be needed on prod when 2.2/2.4 deploy there. Filed as issue (link in activity log).
 
 ---
 
@@ -335,6 +371,7 @@ Per plan L910-965. Create `bridge/src/intents/suiteql-guard.ts` with `sanitizeSu
 | 2026-06-29 | **Process rule: locate-the-function preflight for finny-hermes Python tasks** | Phase 2-9 tasks that modify `finny-hermes` Python MUST include a preflight step BEFORE worker dispatch: (a) file path of target function, (b) actual signature copy-pasted from source, (c) caller inventory via `grep -rn`, (d) test path. Plan pseudocode is no longer sufficient — must be reality-grounded. Triggered by the Task 2.2 halt-and-rescope cycle (signal `verifier-spec-vs-reality-conflation` went 2→3). Saves the loop a strike on every future Python task. |
 | 2026-06-29 | Task 2.2 activated **staging-only**, not bundled with prod deploy | Operator decision after 2.2 merged. Prod deploy is the natural next step but operator chose to verify on staging first (overlay activation = behavior change in the prompt-construction hot path). Prod deploy decoupled to a later operator-driven step. The [#31 deployed/main divergence](https://github.com/Postergully/finny-claude-plugin/issues/31) on finny-claude-plugin makes a quick prod deploy harder anyway — staging-only sidesteps that for now. |
 | 2026-06-29 | Dashboard `HERMES_API_TOKEN` rotation fix bundled with Task 2.2 cutover | Discovered during staging activation: gateway's `API_SERVER_KEY` had been rotated but dashboard's `HERMES_API_TOKEN` (the same key, dashboard-side name) wasn't updated. Symptom: `Failed to send message` in dashboard UI, gateway journal showed `WARNING gateway.platforms.api_server: API server rejected invalid API key`. Fixed via in-place `sed -i` substitution on `/opt/finny/dashboard/.env`, restart `finny-dashboard.service`. **Operational rule going forward:** when rotating `API_SERVER_KEY` on the gateway, also rotate `HERMES_API_TOKEN` in the dashboard `.env` and restart `finny-dashboard.service`. The two values must match. Similar memory pattern as [slack-token-rotation](https://github.com/Postergully/finny-claude-plugin/blob/main/memory/slack-token-rotation.md) — editing env files doesn't reach a running gateway/dashboard, must restart. |
+| 2026-06-29 | finny-mcp systemd unit missing `ENV` env var — added drop-in | Discovered during Task 2.4 staging deploy: post-PR #28 bridge code calls `initAccessDb(process.env.ENV)` at startup; if `ENV` is unset, throws `Fatal error: ENV must be set`. The systemd unit at `/etc/systemd/system/finny-mcp.service` was never updated to set this. Bridge was already broken on the prior `faf4215` deploy too (latent bug — finny-mcp restart would have failed there too if anyone had triggered it). Fix: drop-in `env-staging.conf` setting `Environment=ENV=staging` + `Environment=ACCESS_DB_DIR=/var/lib/finny-mcp/bridge-access-db` (writable dir created `chown ubuntu:ubuntu 0700`). **Prod will hit this same issue when 2.2/2.4 deploy.** Same fix applies (just `ENV=production` instead). File as deployment-checklist entry. |
 
 ## Activity log
 
@@ -360,7 +397,10 @@ Per plan L910-965. Create `bridge/src/intents/suiteql-guard.ts` with `sanitizeSu
 | 2026-06-29 11:42 UTC | Dashboard `Failed to send message` reported by operator. Root cause: dashboard `HERMES_API_TOKEN` was pre-rotation; gateway rotated `API_SERVER_KEY`. Fixed via in-place sed substitution (presence-only verified). `finny-dashboard.service` restarted, auth restored. |
 | 2026-06-29 ~12:00 UTC | End-to-end verification on `dashboard.finny.staging.11mirror.com`: tenant probe + SOUL-invariant probe both return content from their respective layers. **Task 2.2 fully verified on staging.** |
 | 2026-06-29 (later) | Loop dispatched Task 2.3 + Task 2.4 in parallel — 2.3 in finny-hermes-config (per-UID hardening), 2.4 in finny-claude-plugin/bridge (SuiteQL guard). Both tasks scoped staging-only per operator decision. |
-| **NEXT** | Loop reports back when 2.3 + 2.4 are both PR-open with green CI + manifests filed. After both land + verify on staging, Phase 2 implementation is 100% done. Then Phase 2 → Phase 3 transition gate (eval set scaffolding) becomes the forcing constraint before Phase 3 begins. |
+| 2026-06-29 13:18 UTC | finny-claude-plugin#34 (Task 2.4) merged to main at `2ad79b0e3`; finny-hermes-config#13 (Task 2.3) merged at `5b3c6c1`. Loop's earlier "all 4 PRs landed" report was inaccurate — operator pushed merges manually. |
+| 2026-06-29 13:20 UTC | Task 2.4 deployed to staging: `/opt/finny` pulled main, `pnpm install --frozen-lockfile` + `pnpm -C bridge build` clean. finny-mcp.service restart hit `ENV must be set` error (pre-existing systemd unit gap with PR #28's bridge code). Added `/etc/systemd/system/finny-mcp.service.d/env-staging.conf` setting `ENV=staging` + `ACCESS_DB_DIR=/var/lib/finny-mcp/bridge-access-db` (writable dir created with `chown ubuntu:ubuntu 0700`). Bridge now active at `https://finny.staging.11mirror.com/health` returning `{"status":"ok","authMode":"builtin"}`. |
+| 2026-06-29 13:23 UTC | Task 2.3 deployed: `~/.hermes` pulled main, ran `sudo scripts/harden-profile-uid.sh staging`. System user `hermes-staging` (uid 995) created, profile dir chowned to 0700, FINNY_EGRESS chain confirmed present with 2 OUTPUT rules (uid 997 sharechat from earlier loop test + uid 995 staging). Idempotency verified — re-run produces no duplicates. 8/8 rubric checks pass. |
+| **NEXT** | 24h soak window started 2026-06-29 ~13:23 UTC. After 24h clean: Phase 2 implementation complete on staging. Then Phase 2 → Phase 3 transition gate (eval set scaffolding) becomes the forcing constraint before Phase 3 begins. |
 
 ## Phase 2 → Phase 3 transition gate
 
