@@ -256,10 +256,10 @@ Phase 1 closed (with deferred sub-tasks tracked). Phase 2 in progress.
 
 | # | Task | Repo | PR | Status |
 |---|---|---|---|---|
-| 2.1 | Extract SOUL.md from AGENTS.md (additive) | finny-hermes-config | [#12](https://github.com/Postergully/finny-hermes-config/pull/12) | ✅ Open for review |
-| 2.2 | Runtime loader merge (SOUL + AGENTS, [invariant] precedence) | finny-hermes | [#9](https://github.com/Postergully/finny-hermes/pull/9) | ✅ PR open, awaiting smoke + merge + deploy + activation |
-| 2.3 | Per-UID hardening for client-admin profile | finny-hermes-config | — | Pending |
-| 2.4 | SuiteQL parameterization at the bridge | finny-claude-plugin | — | Pending |
+| 2.1 | Extract SOUL.md from AGENTS.md (additive) | finny-hermes-config | [#12](https://github.com/Postergully/finny-hermes-config/pull/12) | ✅ Merged + live on staging |
+| 2.2 | Runtime loader merge (SOUL + AGENTS, [invariant] precedence) | finny-hermes | [#9](https://github.com/Postergully/finny-hermes/pull/9) | ✅ Merged + activated + verified on staging (FINNY_OVERLAY_PATH live) |
+| 2.3 | Per-UID hardening for client-admin profile | finny-hermes-config | — | ⏳ Loop dispatched (parallel with 2.4) |
+| 2.4 | SuiteQL parameterization at the bridge | finny-claude-plugin | — | ⏳ Loop dispatched (parallel with 2.3) |
 
 ### Task 2.1 — completed 2026-06-29
 
@@ -292,14 +292,18 @@ PR: [finny-hermes#9](https://github.com/Postergully/finny-hermes/pull/9) @ `0231
 - Feature-flagged via `FINNY_OVERLAY_PATH` env var — default (unset) preserves byte-identical pre-PR behavior for upstream Hermes users
 - `[invariant]` conflict semantics: SOUL is authoritative over the **entire** `[invariant]` namespace. Overlays can only echo verbatim (silent dedupe); ANY new or changed `[invariant]` line in overlay raises `InvariantConflict`. Stricter than the plan's "duplicate keys raise" phrasing — worker's judgment call confirmed by operator.
 
-**Operator-owned cutover steps:**
-1. Staging smoke per PR body (gateway restart + journal scan, no errors in 5 min window)
-2. Merge `finny-hermes#9` to main
-3. Bundled deploy of finny-hermes-config (3 commits pending: PR #12 SOUL/AGENTS split + manifests + tracker update) + finny-hermes (PR #9 loader) together
-4. Set `FINNY_OVERLAY_PATH=/home/ubuntu/.hermes/client-overlays/sharechat/AGENTS.md` in staging gateway systemd unit / profile `.env` to ACTIVATE the overlay
-5. Verify activation: cowork query against staging should reflect merged SOUL+overlay content
-6. **Sidequest while SSM'd in:** fix [finny-hermes-config#11](https://github.com/Postergully/finny-hermes-config/issues/11) (cron/jobs.json runtime drift — gitignore it) — small scope, big QoL win, prevents future deploy-pull friction
-7. Update this tracker marking 2.2 fully closed + activation step logged
+**Cutover steps completed on staging 2026-06-29 (prod untouched):**
+1. ✅ Staging smoke: pulled `soul-agents-merge` into staging `~/.hermes/hermes-agent`, ran the new pytest suite (9/9 pass), restarted gateway, journal clean, full agent test suite (133 tests) green
+2. ✅ Merged `finny-hermes#9` to main @ `2d56cfc3b`
+3. ✅ Pulled finny-hermes-config main into staging `~/.hermes` + `~/.hermes/profiles/staging` (both at `c79ff1f`, 22 commits FF'd, overlay files now on disk in both checkouts)
+4. ✅ Activated overlay via systemd drop-in at `~/.config/systemd/user/hermes-gateway.service.d/overlay.conf`: `Environment="FINNY_OVERLAY_PATH=/home/ubuntu/.hermes/client-overlays/sharechat/AGENTS.md"` — daemon-reload + restart clean, no `InvariantConflict` raised
+5. ✅ Side fix: dashboard `HERMES_API_TOKEN` was stale (pre-rotation), re-synced to match gateway `API_SERVER_KEY` via in-place sed substitution (presence-only verified, no values in transcript). `finny-dashboard.service` restarted, dashboard auth restored
+6. ✅ End-to-end verification on `dashboard.finny.staging.11mirror.com`:
+   - **Tenant probe** ("What's the tenant context for this Finny instance?") → returned overlay-specific content (ShareChat / MTPL / 11450275 / INR + dual-bank rule from SOUL)
+   - **SOUL-invariant probe** ("What's the envelope contract requirement when I invoke you over MCP?") → returned platform-invariant envelope contract verbatim from SOUL (6 status values, `rows_scanned` null-rejection, `error.retryable` rule, `data.shape='rows'` array-of-arrays, `envelope_validate.py` mandate)
+7. ⏸ **Pending:** prod deploy (operator chose staging-only for now), sidequest [finny-hermes-config#11](https://github.com/Postergully/finny-hermes-config/issues/11) cron/jobs.json gitignore (bundle with Task 2.3 deploy when convenient)
+
+**What this proves:** SOUL+AGENTS runtime merge is live and verified end-to-end on staging. Platform invariants (envelope contract, dual-bank rule, security boundaries) flow through SOUL; client specifics (tenant context, NetSuite account, atomic_fetch path) flow through overlay. Both reach Finny's working context with no conflicts at startup.
 
 ### Task 2.3 — per-UID hardening
 
@@ -329,6 +333,8 @@ Per plan L910-965. Create `bridge/src/intents/suiteql-guard.ts` with `sanitizeSu
 | 2026-06-29 | Task 2.2 — additive `FINNY_OVERLAY_PATH` extension, not loader replacement | Plan pseudocode (`load_context(soul, agents)`) didn't match real `finny-hermes` topology (`load_soul_md()` + `_load_agents_md(cwd)` with fallback chain). Replacement would silently change prompt shape for every upstream Hermes user. Feature-flagged opt-in preserves byte-identical default behavior. |
 | 2026-06-29 | Task 2.2 — `[invariant]` namespace is SOUL-authoritative | Plan said "duplicate keys raise on conflict" but didn't cover new-key-in-overlay case. Worker chose stricter "overlays can only echo verbatim; any new or changed `[invariant]` line raises `InvariantConflict`." Operator confirmed: invariants are platform-level (Neuu Labs domain); allowing overlays to add invariants would let clients elevate tenant-specific behavior to platform-immutable status, breaking the layering model. Future extension if needed: namespaced invariants like `[invariant tenant:<client>]`. |
 | 2026-06-29 | **Process rule: locate-the-function preflight for finny-hermes Python tasks** | Phase 2-9 tasks that modify `finny-hermes` Python MUST include a preflight step BEFORE worker dispatch: (a) file path of target function, (b) actual signature copy-pasted from source, (c) caller inventory via `grep -rn`, (d) test path. Plan pseudocode is no longer sufficient — must be reality-grounded. Triggered by the Task 2.2 halt-and-rescope cycle (signal `verifier-spec-vs-reality-conflation` went 2→3). Saves the loop a strike on every future Python task. |
+| 2026-06-29 | Task 2.2 activated **staging-only**, not bundled with prod deploy | Operator decision after 2.2 merged. Prod deploy is the natural next step but operator chose to verify on staging first (overlay activation = behavior change in the prompt-construction hot path). Prod deploy decoupled to a later operator-driven step. The [#31 deployed/main divergence](https://github.com/Postergully/finny-claude-plugin/issues/31) on finny-claude-plugin makes a quick prod deploy harder anyway — staging-only sidesteps that for now. |
+| 2026-06-29 | Dashboard `HERMES_API_TOKEN` rotation fix bundled with Task 2.2 cutover | Discovered during staging activation: gateway's `API_SERVER_KEY` had been rotated but dashboard's `HERMES_API_TOKEN` (the same key, dashboard-side name) wasn't updated. Symptom: `Failed to send message` in dashboard UI, gateway journal showed `WARNING gateway.platforms.api_server: API server rejected invalid API key`. Fixed via in-place `sed -i` substitution on `/opt/finny/dashboard/.env`, restart `finny-dashboard.service`. **Operational rule going forward:** when rotating `API_SERVER_KEY` on the gateway, also rotate `HERMES_API_TOKEN` in the dashboard `.env` and restart `finny-dashboard.service`. The two values must match. Similar memory pattern as [slack-token-rotation](https://github.com/Postergully/finny-claude-plugin/blob/main/memory/slack-token-rotation.md) — editing env files doesn't reach a running gateway/dashboard, must restart. |
 
 ## Activity log
 
@@ -348,7 +354,13 @@ Per plan L910-965. Create `bridge/src/intents/suiteql-guard.ts` with `sanitizeSu
 | 2026-06-29 06:00 | Phase 2 Task 2.1 — SOUL/AGENTS split shipped additively. `common-infra/SOUL.md` (154 lines, 18 `[invariant]` tags), `common-infra/README.md`, `client-overlays/sharechat/AGENTS.md` (89 lines = 46% of original). Root files byte-identical. Verifier rubric all PASS. PR finny-hermes-config#12 open. |
 | 2026-06-29 (later) | Phase 2 Task 2.2 dispatched, worker halted at locate-the-function step (plan pseudocode `load_context(soul, agents)` didn't match real `finny-hermes` topology). Spec amendment landed: additive `FINNY_OVERLAY_PATH` extension, namespace-locked `[invariant]` conflict rule, locate-the-function preflight rule added to decision log. Worker resumed on amended spec. |
 | 2026-06-29 (later) | Phase 2 Task 2.2 shipped — finny-hermes#9 @ `0231263` on `soul-agents-merge`. 284 insertions across 2 files, 9 new tests + 123 existing pass. Awaiting operator-owned: staging smoke → merge → bundled deploy with finny-hermes-config 3-commit backlog → set `FINNY_OVERLAY_PATH` to activate overlay. |
-| **NEXT** | Operator-owned cutover for Task 2.2 (steps 1-7 in Task 2.2 section above). Then **Task 2.3 — per-UID hardening** in finny-hermes-config. Task 2.4 (SuiteQL guard at bridge) can run in parallel since it's independent. |
+| 2026-06-29 11:24 UTC | `finny-hermes#9` merged to main at `2d56cfc3b`. Staging-only post-merge sequence dispatched. |
+| 2026-06-29 11:26 UTC | Staging `~/.hermes` + `~/.hermes/profiles/staging` pulled main → `c79ff1f` (22 commits FF'd). Overlay files (`common-infra/SOUL.md`, `client-overlays/sharechat/AGENTS.md`) now present on disk in both checkouts. |
+| 2026-06-29 11:27 UTC | Created `overlay.conf` systemd drop-in setting `FINNY_OVERLAY_PATH`. Gateway daemon-reload + restart clean. No `InvariantConflict` at startup — overlay content is clean against the 18 SOUL invariants. |
+| 2026-06-29 11:42 UTC | Dashboard `Failed to send message` reported by operator. Root cause: dashboard `HERMES_API_TOKEN` was pre-rotation; gateway rotated `API_SERVER_KEY`. Fixed via in-place sed substitution (presence-only verified). `finny-dashboard.service` restarted, auth restored. |
+| 2026-06-29 ~12:00 UTC | End-to-end verification on `dashboard.finny.staging.11mirror.com`: tenant probe + SOUL-invariant probe both return content from their respective layers. **Task 2.2 fully verified on staging.** |
+| 2026-06-29 (later) | Loop dispatched Task 2.3 + Task 2.4 in parallel — 2.3 in finny-hermes-config (per-UID hardening), 2.4 in finny-claude-plugin/bridge (SuiteQL guard). Both tasks scoped staging-only per operator decision. |
+| **NEXT** | Loop reports back when 2.3 + 2.4 are both PR-open with green CI + manifests filed. After both land + verify on staging, Phase 2 implementation is 100% done. Then Phase 2 → Phase 3 transition gate (eval set scaffolding) becomes the forcing constraint before Phase 3 begins. |
 
 ## Phase 2 → Phase 3 transition gate
 
