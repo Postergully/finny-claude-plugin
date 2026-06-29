@@ -18,6 +18,8 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 
 import { createHttpServer } from '../../server/http.js';
@@ -32,6 +34,12 @@ let serverPort: number;
 let baseUrl: string;
 
 beforeAll(async () => {
+  // createHttpServer() requires ENV (see bridge/src/server/http.ts:113 initAccessDb).
+  // Set to 'test' and route the access-log SQLite to a tmpdir so CI doesn't
+  // try to mkdir under /opt/deployments (read-only on CI runners).
+  process.env.ENV = process.env.ENV ?? 'test';
+  process.env.ACCESS_DB_DIR = process.env.ACCESS_DB_DIR ?? path.join(os.tmpdir(), 'finny-mcp-test-access-db');
+
   // Probe a free port by letting Node's HTTP server pick one, then close it.
   const probe = http.createServer();
   await new Promise<void>((resolve) => probe.listen(0, '127.0.0.1', () => resolve()));
