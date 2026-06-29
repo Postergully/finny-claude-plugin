@@ -1,10 +1,19 @@
-# Phase 1 — Staging parity (running progress tracker)
+# Phase 1 & 2 — Staging parity + SOUL/AGENTS split (running progress tracker)
 
-**Plan source:** `/Applications/finny-core/docs/plan/implementation.md` L285–510
+**Plan source:** `/Applications/finny-core/docs/plan/implementation.md` L285–966
 **Started:** 2026-06-29
 **Owner:** Operator (Kali) + Assistant (SSM-driven)
 
-**Phase gate (must hold to exit):** Staging refreshed from current prod snapshot · oracle envelopes captured from staging · `pnpm eval --target https://finny.staging.11mirror.com/mcp --oracle eval/oracle` returns 100% pass · zero drift · nightly + per-PR CI workflow runs the eval against staging.
+## Phase status overview
+
+| Phase | Status | Notes |
+|---|---|---|
+| **Phase 1 — Staging parity** | 🟡 Partial complete | Task 1.1 done; 1.2/1.3/1.4 (eval set) deferred to a dedicated session |
+| **Phase 2 — SOUL/AGENTS split + per-UID hardening** | 🟢 In progress | Task 2.1 PR open (finny-hermes-config#12); 2.2/2.3/2.4 next |
+
+**Phase 1 gate:** Staging refreshed from current prod snapshot · oracle envelopes captured (deferred) · eval 100% pass (deferred) · CI workflow (deferred). 1.1 alone is enough to unblock Phase 2.
+
+**Phase 2 gate:** Fresh client profile loads only the AGENTS.md overlay · touching SOUL.md doesn't require client edits · cross-profile `cat .env` denied at OS layer · SuiteQL guard at bridge.
 
 ---
 
@@ -226,14 +235,53 @@
 
 ## Phase 1 exit checklist
 
-When all of these check, Phase 1 is closed and Phase 2 can begin (see `finny-core` plan L716+):
+- [x] Task 1.1 verifier rubric all green (2026-06-29)
+- [ ] Task 1.2 verifier rubric all green — **deferred**
+- [ ] Task 1.3 verifier rubric all green (eval set 100% pass) — **deferred**
+- [ ] Task 1.4 verifier rubric all green (CI workflow) — **deferred**
+- [x] `/etc/finny-snapshot-stamp` written on staging (2026-06-29)
+- [x] Operator sign-off for proceeding to Phase 2 without 1.2/1.3/1.4
 
-- [ ] Task 1.1 verifier rubric all green
-- [ ] Task 1.2 verifier rubric all green
-- [ ] Task 1.3 verifier rubric all green (eval set 100% pass)
-- [ ] Task 1.4 verifier rubric all green (CI workflow nightly + per-PR)
-- [ ] `/etc/finny-snapshot-stamp` ≤ 24h old on staging
-- [ ] Operator sign-off
+Phase 1 closed (with deferred sub-tasks tracked). Phase 2 in progress.
+
+---
+
+## Phase 2 — SOUL/AGENTS split + per-UID hardening
+
+**Plan reference:** `implementation.md` L716–966.
+
+**Phase gate:** Fresh client profile loads only the AGENTS.md overlay · touching SOUL.md doesn't require client edits · cross-profile `cat .env` denied at OS layer · SuiteQL guard at bridge.
+
+### Tasks
+
+| # | Task | Repo | PR | Status |
+|---|---|---|---|---|
+| 2.1 | Extract SOUL.md from AGENTS.md (additive) | finny-hermes-config | [#12](https://github.com/Postergully/finny-hermes-config/pull/12) | ✅ Open for review |
+| 2.2 | Runtime loader merge (SOUL + AGENTS, [invariant] precedence) | finny-hermes | — | Next |
+| 2.3 | Per-UID hardening for client-admin profile | finny-hermes-config | — | Pending |
+| 2.4 | SuiteQL parameterization at the bridge | finny-claude-plugin | — | Pending |
+
+### Task 2.1 — completed 2026-06-29
+
+Additive multi-tenant layout. Root files byte-identical (no runtime change). New files:
+- `common-infra/SOUL.md` (154 lines, 18 `[invariant]` tags) — identity, security, authority, envelope contract, mandatory-first-call rule, memory write-back
+- `common-infra/README.md` — load order docs + editing policy
+- `client-overlays/sharechat/AGENTS.md` (89 lines = 46% of original 195) — tenant context, first-call script body, resolver pointers, SuiteQL execution rules, lolly archive
+
+Manifest: `finny-hermes-config/docs/staging/soul-agents-split-changes.md`.
+Deploy is safe (additive). No restart needed. Loader still reads root files.
+
+### Task 2.2 (next) — loader change in finny-hermes
+
+Per plan L778-826. Find `AGENTS.md` loader in `finny-hermes` Python (likely `hermes_agent/context_loader.py`). Add SOUL+AGENTS concatenation with `[invariant]` conflict detection. Write 2 pytest cases (load order, conflict raises). After this ships, root SOUL.md + AGENTS.md can be deleted in a follow-up PR.
+
+### Task 2.3 — per-UID hardening
+
+Per plan L830-907. New system user per profile (`hermes-sharechat`), chown profile dir 0700, .env 0600, systemd template `finny-profile@.service` with `ProtectSystem=strict NoNewPrivileges=yes`, iptables OWNER egress allowlist. Cross-UID `cat .env` must return Permission denied.
+
+### Task 2.4 — SuiteQL guard at bridge
+
+Per plan L910-965. Create `bridge/src/intents/suiteql-guard.ts` with `sanitizeSuiteQL()` — allow SELECT/WITH only, reject DDL/DML keywords, reject `;`/`--`/`/*`. Wire into every SuiteQL call site in bridge. 6 unit tests.
 
 ---
 
@@ -247,6 +295,11 @@ When all of these check, Phase 1 is closed and Phase 2 can begin (see `finny-cor
 | 2026-06-29 | `feat-bridge-oidc-onelogin` Draft, decision deferred to Phase 3 | OneLogin vs Zitadel v1 IdP question; Phase 3 owns authz substrate |
 | 2026-06-29 | Deploy PR #3 to prod with stash-pull-restore for cron/jobs.json | Discovered cron/jobs.json is runtime-drift (written by cron tick) but was tracked. Stashed local, pulled, dropped stash. Filed as issue #11. |
 | 2026-06-29 | Restart gateway after pull on prod | config.yaml skill disables (airtable, github-issues, godmode) need gateway restart to take effect |
+| 2026-06-29 | Refresh staging in-place (not AMI re-image) for Task 1.1 | finny-hermes-config#3 already deployed to prod; just need staging checkouts to match. Quarantined `staging.preimport` orphan (mirror of the stagesnap problem on prod). |
+| 2026-06-29 | Defer Phase 1.2/1.3/1.4 (eval canonical queries) | Phase 2 (SOUL/AGENTS split) doesn't need the eval set; it has its own exit gate. Eval set is a 1-2 day side quest that doesn't block Phase 2 architecture work. Will revisit when needed. |
+| 2026-06-29 | Phase 2 Task 2.1 — additive only, no root file changes | Root SOUL.md + AGENTS.md are loaded by current gateway. Moving them breaks staging until Task 2.2 loader change ships. Split files into `common-infra/` + `client-overlays/sharechat/` alongside root; root deleted after Task 2.2 ships. |
+| 2026-06-29 | Envelope contract → SOUL.md (platform invariant) | Envelope shape is enforced by the bridge regardless of client. All future multi-tenant clients use the same envelope. Goes in SOUL, not AGENTS. |
+| 2026-06-29 | Mandatory first-call rule → SOUL.md, script path → AGENTS.md | The *requirement* to run a first-call script is platform-invariant (skipping costs 14s + risks hallucinated imports). The *specific script* (atomic_fetch.py path, payload shape) is client-specific. |
 
 ## Activity log
 
@@ -260,7 +313,11 @@ When all of these check, Phase 1 is closed and Phase 2 can begin (see `finny-cor
 | 2026-06-29 05:03 | PRs #24 + #25 merged to main (`2e65017`, `53dd2c4`). |
 | 2026-06-29 05:05 | 7 follow-up issues filed in finny-hermes-config (#4–#10). |
 | 2026-06-29 05:10 | `deployed` fast-forwarded to `29f98ef`. Prod pulled (with stash for cron/jobs.json). Gateway restarted. Smoke test 5/5 parity. Issue #11 filed for cron/jobs.json drift. |
-| **NEXT** | Phase 1 Task 1.1 — refresh staging |
+| 2026-06-29 05:13 | Phase 1 Task 1.1 — staging refreshed in-place: `~/.hermes` + `~/.hermes/profiles/staging` checkouts → `deployed @ 29f98ef`. Probe edits in `system_prompt.py` discarded. `staging.preimport` orphan profile (421MB) quarantined to `/tmp`. `/etc/finny-snapshot-stamp` written. Gateway restarted. |
+| 2026-06-29 05:24 | Operator ran query 1 ("vendor balance for Google Cloud India") — correct answer, but gateway log showed Finny tried 4 hallucinated `netsuite_kb` imports before recovering. atomic_fetch.py NOT called as first tool. Investigation: AGENTS.md mandate is present (line 109) but agent chose not to follow. Filed as instruction-following gap (not infra). |
+| 2026-06-29 ~05:50 | Phase 1.2/1.3/1.4 (eval canonical queries + capture + CI) **deferred** per operator decision to a dedicated eval-build session. Phase 2 unblocked. |
+| 2026-06-29 06:00 | Phase 2 Task 2.1 — SOUL/AGENTS split shipped additively. `common-infra/SOUL.md` (154 lines, 18 `[invariant]` tags), `common-infra/README.md`, `client-overlays/sharechat/AGENTS.md` (89 lines = 46% of original). Root files byte-identical. Verifier rubric all PASS. PR finny-hermes-config#12 open. |
+| **NEXT** | Phase 2 Task 2.2 — loader change in `finny-hermes` Python (read SOUL+AGENTS, merge with `[invariant]` precedence, raise `InvariantConflict` on conflict). After 2.2 ships, root SOUL.md / AGENTS.md can be deleted. |
 
 ## References
 
