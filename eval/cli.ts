@@ -10,7 +10,12 @@
 
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve, basename, join } from 'node:path';
+// NOTE: `.ts` extensions are intentional here. This file runs under
+// `node --experimental-strip-types`, which expects the on-disk filename.
+// The bridge's `.js` ESM convention (per root CLAUDE.md) applies to
+// bundled output; the `eval/` directory is a separate strip-types runtime.
 import { runEval, type EvalQuery, type EvalEnvelope, type EvalResult } from './run-eval.ts';
+import { makeFetchEnvelope } from './transport.ts';
 
 interface CliArgs {
   target: string;
@@ -99,35 +104,6 @@ function loadOracle(dir: string, queries: QueryWithOracleHint[]): Record<string,
     // else: leave unset → runner emits status:'fail' with diff:'no oracle'.
   }
   return out;
-}
-
-function makeFetchEnvelope(
-  target: string,
-  token: string | undefined,
-): (q: EvalQuery) => Promise<EvalEnvelope> {
-  // Convention: bridge exposes each tool at `<target>/tools/<tool-name>`.
-  // The eval CLI is a thin wrapper — adjust this route mapping when the bridge contract
-  // moves. The unit tests inject a mock fetchEnvelope, so this code path is exercised
-  // only at the live CLI.
-  return async (q: EvalQuery): Promise<EvalEnvelope> => {
-    const url = `${target.replace(/\/$/, '')}/tools/${encodeURIComponent(q.tool)}`;
-    const headers: Record<string, string> = { 'content-type': 'application/json' };
-    if (token) headers['authorization'] = `Bearer ${token}`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ input: q.input }),
-    });
-    const body = await res.text();
-    let env: EvalEnvelope;
-    try {
-      env = JSON.parse(body) as EvalEnvelope;
-    } catch {
-      // Non-JSON response → synthesize an error envelope so the runner sees a shape mismatch.
-      env = { shape: 'transport_error', data: { http_status: res.status, body: body.slice(0, 500) } };
-    }
-    return env;
-  };
 }
 
 async function main(): Promise<void> {
