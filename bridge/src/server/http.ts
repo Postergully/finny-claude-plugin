@@ -20,6 +20,7 @@
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse, Server as HttpServer } from 'node:http';
 import type { Request, Response, NextFunction } from 'express';
+import express from 'express';
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -28,7 +29,8 @@ import { mcpAuthRouter } from '@modelcontextprotocol/sdk/server/auth/router.js';
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
 
 import { HermesAuthProvider, type AuthProviderConfig } from '../auth/provider.js';
-import { exchangeGoogleCode } from '../auth/google.js';
+import { createOidcVerifier, getOidcDiscovery, type OidcProviderConfig } from '../auth/oidc.js';
+import { initAccessDb } from '../auth/access-db.js';
 import { log, logError } from '../utils/logger.js';
 import { createMcpServer, type ToolRegistrationDeps } from './tools-registration.js';
 import { registerReadyRoute } from './ready.js';
@@ -107,6 +109,12 @@ export async function createHttpServer(
   config: HttpServerConfig,
   deps: ToolRegistrationDeps
 ): Promise<void> {
+  const env = process.env.ENV;
+  if (!env) {
+    throw new Error('ENV must be set (e.g., staging, production)');
+  }
+  initAccessDb(env);
+
   const authEnabled = !!config.authConfig?.clientId;
   const corsConfig = loadCorsConfig();
 
@@ -167,51 +175,131 @@ export async function createHttpServer(
   // --- Access log middleware (before auth so rejected requests are logged) ---
   app.use(accessLogMiddleware());
 
-  // --- OAuth routes (if auth enabled) ---
+  // --- Auth mode selection ---
+  const authMode = process.env.AUTH_MODE === 'oidc' ? 'oidc' : 'builtin';
   let authMiddleware: ((req: Request, res: Response, next: NextFunction) => void) | undefined;
-  let provider: HermesAuthProvider | undefined;
 
-  if (authEnabled) {
-    provider = new HermesAuthProvider(config.authConfig!);
+  if (authMode === 'oidc') {
+    const oidcIssuer = process.env.OIDC_ISSUER;
+    const oidcAudience = process.env.OIDC_AUDIENCE;
+    if (!oidcIssuer || !oidcAudience) {
+      throw new Error('AUTH_MODE=oidc requires OIDC_ISSUER and OIDC_AUDIENCE env vars');
+    }
+
+    const oidcConfig: OidcProviderConfig = {
+      issuer: oidcIssuer,
+      audience: oidcAudience,
+      jwksUri: process.env.OIDC_JWKS_URI || undefined,
+    };
+    const verifier = await createOidcVerifier(oidcConfig);
+
     const issuerUrl = config.issuerUrl
       ? new URL(config.issuerUrl)
       : new URL(`http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
+    const baseUrl = issuerUrl.toString().replace(/\/$/, '');
 
-    // --- Google OAuth callback (before mcpAuthRouter, no MCP auth needed) ---
-    if (process.env.AUTH_REQUIRE_LOGIN === 'true') {
-      app.get('/auth/google/callback', async (req: Request, res: Response) => {
-        const googleCode = req.query.code as string | undefined;
-        const pendingId = req.query.state as string | undefined;
+    const tokenProxyPath = '/oauth/token';
+    const authorizeProxyPath = '/oauth/authorize';
 
-        if (!googleCode || !pendingId) {
-          res.status(400).send('Missing code or state parameter from Google');
-          return;
+    // Serve OAuth Authorization Server metadata — all endpoints on OUR origin so CoWork
+    // doesn't re-derive endpoints from the authorization_endpoint's origin.
+    app.get('/.well-known/oauth-authorization-server', async (_req: Request, res: Response) => {
+      try {
+        const discovery = await getOidcDiscovery(oidcIssuer);
+        res.json({
+          issuer: baseUrl,
+          authorization_endpoint: `${baseUrl}${authorizeProxyPath}`,
+          token_endpoint: `${baseUrl}${tokenProxyPath}`,
+          registration_endpoint: `${baseUrl}/oauth/register`,
+          jwks_uri: discovery.jwks_uri,
+          scopes_supported: discovery.scopes_supported || ['openid', 'profile', 'email'],
+          response_types_supported: discovery.response_types_supported || ['code'],
+          grant_types_supported: discovery.grant_types_supported || ['authorization_code', 'refresh_token'],
+          code_challenge_methods_supported: discovery.code_challenge_methods_supported || ['S256'],
+          token_endpoint_auth_methods_supported: ['none'],
+          revocation_endpoint: discovery.revocation_endpoint,
+        });
+      } catch (err) {
+        logError('Failed to fetch OIDC discovery', err);
+        res.status(502).json({ error: 'Failed to fetch authorization server metadata' });
+      }
+    });
+
+    // Authorize proxy — 302 redirects to the real IdP authorize endpoint.
+    // Keeps authorization_endpoint on our origin so CoWork uses our token_endpoint.
+    // Strips `resource` because OneLogin binds it to the auth code server-side
+    // and rejects the token exchange if the resource was present at authorize-time.
+    app.get(authorizeProxyPath, async (req: Request, res: Response) => {
+      try {
+        const discovery = await getOidcDiscovery(oidcIssuer);
+        const target = new URL(discovery.authorization_endpoint);
+        for (const [key, value] of Object.entries(req.query)) {
+          if (key === 'resource' || key === 'audience') continue;
+          if (typeof value === 'string') target.searchParams.set(key, value);
         }
+        res.redirect(302, target.toString());
+      } catch (err) {
+        logError('Authorize proxy error', err);
+        res.status(502).json({ error: 'authorize_proxy_error', error_description: 'Failed to reach authorization endpoint' });
+      }
+    });
 
-        try {
-          const googleRedirectUri = `${issuerUrl.toString().replace(/\/$/, '')}/auth/google/callback`;
-          const userInfo = await exchangeGoogleCode(googleCode, googleRedirectUri);
-
-          log(`Google login successful: ${userInfo.email}`);
-
-          const redirectUrl = provider!.completeAuthorization(pendingId, userInfo.email);
-          res.redirect(redirectUrl);
-        } catch (error) {
-          logError('Google OAuth callback failed', error);
-          res
-            .status(500)
-            .send(
-              `<html><body style="font-family:system-ui;padding:2rem;">` +
-                `<h2>Authentication failed</h2>` +
-                `<p>${error instanceof Error ? error.message : 'Unknown error'}</p>` +
-                `<p><a href="javascript:window.close()">Close this window</a> and try again.</p>` +
-                `</body></html>`
-            );
+    // Token proxy — strips `resource`/`audience` and forwards to the real token endpoint.
+    app.post(tokenProxyPath, express.urlencoded({ extended: false }), express.json(), async (req: Request, res: Response) => {
+      try {
+        const discovery = await getOidcDiscovery(oidcIssuer);
+        const body = req.body as Record<string, string> | undefined;
+        const params = new URLSearchParams();
+        if (body && typeof body === 'object') {
+          for (const [key, value] of Object.entries(body)) {
+            if (key === 'resource' || key === 'audience') continue;
+            if (typeof value === 'string') params.set(key, value);
+          }
         }
+        const tokenRes = await fetch(discovery.token_endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString(),
+        });
+        const tokenData = await tokenRes.text();
+        res.status(tokenRes.status).set('Content-Type', tokenRes.headers.get('content-type') || 'application/json').send(tokenData);
+      } catch (err) {
+        logError('Token proxy error', err);
+        res.status(502).json({ error: 'token_proxy_error', error_description: 'Failed to reach token endpoint' });
+      }
+    });
+
+    // DCR proxy — returns the static client_id for MCP clients that attempt registration
+    app.post('/oauth/register', express.json(), (_req: Request, res: Response) => {
+      const oidcClientId = process.env.OIDC_CLIENT_ID || '';
+      res.status(201).json({
+        client_id: oidcClientId,
+        client_name: 'MCP Client',
+        redirect_uris: ['https://claude.ai/api/mcp/auth_callback'],
+        grant_types: ['authorization_code', 'refresh_token'],
+        response_types: ['code'],
+        token_endpoint_auth_method: 'none',
       });
+    });
 
-      log('Google OAuth login enabled (AUTH_REQUIRE_LOGIN=true)');
-    }
+    // Protected Resource Metadata (RFC 9728)
+    app.get('/.well-known/oauth-protected-resource/:path', (_req: Request, res: Response) => {
+      res.json({
+        resource: `${baseUrl}/${_req.params.path}`,
+        authorization_servers: [baseUrl],
+        scopes_supported: ['openid', 'profile', 'email'],
+      });
+    });
+
+    const resourceMetadataUrl = `${baseUrl}/.well-known/oauth-protected-resource/mcp`;
+    authMiddleware = requireBearerAuth({ verifier, resourceMetadataUrl });
+
+    log(`Auth mode: oidc (issuer: ${oidcIssuer})`);
+  } else if (authEnabled) {
+    const provider = new HermesAuthProvider(config.authConfig!);
+    const issuerUrl = config.issuerUrl
+      ? new URL(config.issuerUrl)
+      : new URL(`http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
 
     // Install OAuth endpoints: /authorize, /token, /register, /revoke
     // and .well-known discovery metadata
@@ -246,8 +334,8 @@ export async function createHttpServer(
     res.json({
       status: 'ok',
       transport: 'http',
-      auth: authEnabled,
-      loginRequired: process.env.AUTH_REQUIRE_LOGIN === 'true',
+      auth: authEnabled || authMode === 'oidc',
+      authMode,
     });
   });
 
@@ -343,19 +431,21 @@ export async function createHttpServer(
 
   const httpServer: HttpServer = app.listen(config.port, config.host, () => {
     log(`HTTP server listening on ${config.host}:${config.port}`);
-    log(`Auth enabled: ${authEnabled}`);
+    log(`Auth mode: ${authMode}`);
     log(`CORS origins: ${corsConfig.enabled ? corsConfig.origins.join(', ') : 'disabled'}`);
 
-    if (authEnabled) {
+    if (authMode === 'oidc') {
+      log('OIDC authentication is REQUIRED for all connections');
+      log('Endpoints:');
+      log('  GET  /.well-known/oauth-authorization-server          - OIDC provider metadata');
+      log('  GET  /.well-known/oauth-protected-resource/mcp        - Protected resource metadata');
+    } else if (authEnabled) {
       log('OAuth 2.1 authentication is REQUIRED for all connections');
       log('Endpoints:');
       log('  GET  /.well-known/oauth-authorization-server          - OAuth metadata');
       log('  GET  /.well-known/oauth-protected-resource/mcp        - Protected resource metadata');
       log('  POST /authorize                                       - Authorization');
       log('  POST /token                                           - Token exchange');
-      if (process.env.AUTH_REQUIRE_LOGIN === 'true') {
-        log('  GET  /auth/google/callback                            - Google OAuth callback');
-      }
     } else {
       log('WARNING: Auth is DISABLED - server is open to anyone!');
     }
