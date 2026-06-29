@@ -1,0 +1,281 @@
+[
+  {
+    "id": "q01-vendor-balance-discover",
+    "tool": "finny_query",
+    "intent": "Vendor balance — discover phase, no scope provided. Bridge should reply needs_input with required scope vars.",
+    "input": {
+      "intent": "vendor_balance",
+      "phase": "discover",
+      "expected_shape": "scalar"
+    },
+    "scope": {},
+    "expected_envelope_shape": "needs_input",
+    "expected_required_vars": ["vendor", "period", "env"],
+    "prod_oracle_path": "eval/oracle/q01-vendor-balance-discover.json",
+    "notes": "Anchors the discover phase + needs_input envelope shape. Identity (tenant/user/bank) is NOT in input — bridge derives it from JWT."
+  },
+  {
+    "id": "q02-vendor-balance-execute",
+    "tool": "finny_query",
+    "intent": "Vendor balance — execute phase with scope filled in. Expects ok envelope with scalar value.",
+    "input": {
+      "intent": "vendor_balance",
+      "phase": "execute",
+      "scope": { "vendor": "<vendor-1>", "period": "Q1-FY26" },
+      "expected_shape": "scalar",
+      "entity_hints": { "env": "production" }
+    },
+    "scope": { "vendor": "<vendor-1>", "period": "Q1-FY26" },
+    "expected_envelope_shape": "ok",
+    "prod_oracle_path": "eval/oracle/q02-vendor-balance-execute.json",
+    "notes": "Companion to q01 — same intent, scope filled. Verifier uses this to confirm the discover→execute round-trip."
+  },
+  {
+    "id": "q03-freeform-narrative-sandbox",
+    "tool": "finny_query",
+    "intent": "Free-form question against sandbox env. Exercises the legacy `question` path and narrative shape.",
+    "input": {
+      "question": "Summarize the top 5 vendors by spend last quarter.",
+      "expected_shape": "narrative",
+      "entity_hints": { "env": "sandbox" }
+    },
+    "scope": { "env": "sandbox" },
+    "expected_envelope_shape": "ok",
+    "prod_oracle_path": "eval/oracle/q03-freeform-narrative-sandbox.json",
+    "notes": "Sandbox env coverage. Free-form question path (no intent name)."
+  },
+  {
+    "id": "q04-invalid-period-error",
+    "tool": "finny_query",
+    "intent": "Vendor balance with a malformed period. Expects an error envelope, not a crash.",
+    "input": {
+      "intent": "vendor_balance",
+      "phase": "execute",
+      "scope": { "vendor": "<vendor-1>", "period": "NOT-A-PERIOD" },
+      "expected_shape": "scalar",
+      "entity_hints": { "env": "production" }
+    },
+    "scope": { "vendor": "<vendor-1>", "period": "NOT-A-PERIOD" },
+    "expected_envelope_shape": "error",
+    "prod_oracle_path": "eval/oracle/q04-invalid-period-error.json",
+    "notes": "Error path #1: invalid period string. Plan rubric requires at least one error-path query — this one + q11/q12/q15/q19 together cover the surface."
+  },
+  {
+    "id": "q05-report-vendor-balance",
+    "tool": "finny_report",
+    "intent": "Run the vendor_balance report (enum #1 of 6).",
+    "input": {
+      "report": "vendor_balance",
+      "params": { "vendor": "<vendor-1>", "period": "Q1-FY26" },
+      "env": "production"
+    },
+    "scope": { "vendor": "<vendor-1>", "period": "Q1-FY26" },
+    "expected_envelope_shape": "ok",
+    "prod_oracle_path": "eval/oracle/q05-report-vendor-balance.json",
+    "notes": "Report enum coverage 1/6."
+  },
+  {
+    "id": "q06-report-open-bills",
+    "tool": "finny_report",
+    "intent": "Run the open_bills report (enum #2 of 6).",
+    "input": {
+      "report": "open_bills",
+      "params": { "vendor": "<vendor-1>" },
+      "env": "production"
+    },
+    "scope": { "vendor": "<vendor-1>" },
+    "expected_envelope_shape": "ok",
+    "prod_oracle_path": "eval/oracle/q06-report-open-bills.json",
+    "notes": "Report enum coverage 2/6."
+  },
+  {
+    "id": "q07-report-bill-detail",
+    "tool": "finny_report",
+    "intent": "Run the bill_detail report for a specific bill (enum #3 of 6).",
+    "input": {
+      "report": "bill_detail",
+      "params": { "bill_id": "<bill-1>" },
+      "env": "production"
+    },
+    "scope": { "bill_id": "<bill-1>" },
+    "expected_envelope_shape": "ok",
+    "prod_oracle_path": "eval/oracle/q07-report-bill-detail.json",
+    "notes": "Report enum coverage 3/6."
+  },
+  {
+    "id": "q08-report-vendor-summary",
+    "tool": "finny_report",
+    "intent": "Run the vendor_summary report (enum #4 of 6).",
+    "input": {
+      "report": "vendor_summary",
+      "params": { "vendor": "<vendor-1>", "period": "FY26" },
+      "env": "production"
+    },
+    "scope": { "vendor": "<vendor-1>", "period": "FY26" },
+    "expected_envelope_shape": "ok",
+    "prod_oracle_path": "eval/oracle/q08-report-vendor-summary.json",
+    "notes": "Report enum coverage 4/6."
+  },
+  {
+    "id": "q09-report-gstin-lookup",
+    "tool": "finny_report",
+    "intent": "Run the gstin_lookup report (enum #5 of 6). India tax-id lookup.",
+    "input": {
+      "report": "gstin_lookup",
+      "params": { "gstin": "<gstin-placeholder>" },
+      "env": "production"
+    },
+    "scope": { "gstin": "<gstin-placeholder>" },
+    "expected_envelope_shape": "ok",
+    "prod_oracle_path": "eval/oracle/q09-report-gstin-lookup.json",
+    "notes": "Report enum coverage 5/6."
+  },
+  {
+    "id": "q10-report-po-status-sandbox",
+    "tool": "finny_report",
+    "intent": "Run the po_status report against sandbox (enum #6 of 6). Adds sandbox env coverage on the report surface.",
+    "input": {
+      "report": "po_status",
+      "params": { "po_id": "<po-1>" },
+      "env": "sandbox"
+    },
+    "scope": { "po_id": "<po-1>" },
+    "expected_envelope_shape": "ok",
+    "prod_oracle_path": "eval/oracle/q10-report-po-status-sandbox.json",
+    "notes": "Report enum coverage 6/6. Also covers env: sandbox on finny_report."
+  },
+  {
+    "id": "q11-report-unknown-vendor-error",
+    "tool": "finny_report",
+    "intent": "vendor_balance report with an unknown vendor. Expects error envelope from upstream resolver.",
+    "input": {
+      "report": "vendor_balance",
+      "params": { "vendor": "<unknown-vendor>", "period": "Q1-FY26" },
+      "env": "production"
+    },
+    "scope": { "vendor": "<unknown-vendor>", "period": "Q1-FY26" },
+    "expected_envelope_shape": "error",
+    "prod_oracle_path": "eval/oracle/q11-report-unknown-vendor-error.json",
+    "notes": "Error path #2: unknown vendor — exercises the resolver's not-found branch (envelope, not exception)."
+  },
+  {
+    "id": "q12-report-missing-required-param-error",
+    "tool": "finny_report",
+    "intent": "bill_detail without bill_id — bridge should return an error envelope citing the missing param.",
+    "input": {
+      "report": "bill_detail",
+      "params": {},
+      "env": "production"
+    },
+    "scope": {},
+    "expected_envelope_shape": "error",
+    "prod_oracle_path": "eval/oracle/q12-report-missing-required-param-error.json",
+    "notes": "Error path #3: malformed input (missing required param). Verifies bridge-level validation, not Hermes-level."
+  },
+  {
+    "id": "q13-continue-cursor-drain",
+    "tool": "finny_continue",
+    "intent": "Drain a paginated rows result via cursor token. Token issued by q20.",
+    "input": {
+      "cursor": "cursor:opaque-token-1"
+    },
+    "scope": { "cursor": "cursor:opaque-token-1" },
+    "expected_envelope_shape": "ok",
+    "prod_oracle_path": "eval/oracle/q13-continue-cursor-drain.json",
+    "notes": "Pagination cursor flow. The token is a synthetic placeholder — Task 0.3 will record the actual prod cursor shape from running q20 first, then patch this placeholder."
+  },
+  {
+    "id": "q14-continue-conversation-needs-input",
+    "tool": "finny_continue",
+    "intent": "Resume a needs_input loop by answering with a selected option.",
+    "input": {
+      "conversation_id": "conv:opaque-id-1",
+      "response": { "selected_option": "option-a" }
+    },
+    "scope": { "conversation_id": "conv:opaque-id-1" },
+    "expected_envelope_shape": "ok",
+    "prod_oracle_path": "eval/oracle/q14-continue-conversation-needs-input.json",
+    "notes": "Conversation branch of finny_continue (the other branch is cursor). Pairs with any needs_input emitter — e.g. q01."
+  },
+  {
+    "id": "q15-continue-invalid-cursor-error",
+    "tool": "finny_continue",
+    "intent": "Drain with an unknown / expired cursor token. Expects error envelope.",
+    "input": {
+      "cursor": "cursor:does-not-exist"
+    },
+    "scope": { "cursor": "cursor:does-not-exist" },
+    "expected_envelope_shape": "error",
+    "prod_oracle_path": "eval/oracle/q15-continue-invalid-cursor-error.json",
+    "notes": "Error path #4: invalid cursor. Also guards against cursor-leakage between principals (bridge enforces ownership)."
+  },
+  {
+    "id": "q16-remember-cowork",
+    "tool": "finny_remember",
+    "intent": "Persist a synthesis from cowork into Finny's workspace memory.",
+    "input": {
+      "content": "Vendor <vendor-1> Q1-FY26 balance reconciles to ledger order-of-magnitude $$$$.",
+      "tags": ["reconciliation", "Q1-FY26"],
+      "source": "cowork"
+    },
+    "scope": { "tags": ["reconciliation", "Q1-FY26"], "source": "cowork" },
+    "expected_envelope_shape": "ok",
+    "prod_oracle_path": "eval/oracle/q16-remember-cowork.json",
+    "notes": "finny_remember coverage. Bank target is server-derived from JWT — input carries no bank_id."
+  },
+  {
+    "id": "q17-remember-manual",
+    "tool": "finny_remember",
+    "intent": "Persist a manual operator note into Finny's workspace memory.",
+    "input": {
+      "content": "Operator note: <vendor-1> historically files invoices late; alert ops if Q2 lag exceeds order-of-magnitude $.",
+      "tags": ["ops-note", "<vendor-1>"],
+      "source": "manual"
+    },
+    "scope": { "tags": ["ops-note", "<vendor-1>"], "source": "manual" },
+    "expected_envelope_shape": "ok",
+    "prod_oracle_path": "eval/oracle/q17-remember-manual.json",
+    "notes": "Second remember source enum value (manual). Ensures both source enum branches are exercised."
+  },
+  {
+    "id": "q18-task-status-known",
+    "tool": "finny_task_status",
+    "intent": "Poll a task that the bridge has stored (completed or running).",
+    "input": {
+      "task_id": "task:opaque-id-1"
+    },
+    "scope": { "task_id": "task:opaque-id-1" },
+    "expected_envelope_shape": "ok",
+    "prod_oracle_path": "eval/oracle/q18-task-status-known.json",
+    "notes": "task_id is a synthetic placeholder — Task 0.3 will issue a long-running query first (e.g. q05 with deadline_ms=1) to capture a real running-task id, then patch this placeholder."
+  },
+  {
+    "id": "q19-task-status-unknown-error",
+    "tool": "finny_task_status",
+    "intent": "Poll a task_id that does not exist (or has aged out of the 1h TTL). Expects error envelope.",
+    "input": {
+      "task_id": "task:does-not-exist"
+    },
+    "scope": { "task_id": "task:does-not-exist" },
+    "expected_envelope_shape": "error",
+    "prod_oracle_path": "eval/oracle/q19-task-status-unknown-error.json",
+    "notes": "Error path #5: unknown task_id. Confirms the bridge returns a structured error envelope, not a 500."
+  },
+  {
+    "id": "q20-query-paginated-rows-issues-cursor",
+    "tool": "finny_query",
+    "intent": "Rows-shape query large enough to issue a pagination cursor. Pairs with q13 (continue drains the cursor).",
+    "input": {
+      "intent": "open_bills_listing",
+      "phase": "execute",
+      "scope": { "period": "FY26" },
+      "expected_shape": "rows",
+      "max_tokens": 2000,
+      "entity_hints": { "env": "production" }
+    },
+    "scope": { "period": "FY26" },
+    "expected_envelope_shape": "ok",
+    "prod_oracle_path": "eval/oracle/q20-query-paginated-rows-issues-cursor.json",
+    "notes": "Upstream of the q13 cursor flow. Oracle envelope MUST include the cursor token in data — Task 0.3 captures it then redacts the literal value to `cursor:opaque-token-1` in both this oracle and q13's input."
+  }
+]
