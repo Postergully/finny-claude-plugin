@@ -12,6 +12,17 @@ name: Eval (staging)
 #                        the eval runs anonymously (some staging endpoints may allow this).
 #                        Add under Repo Settings → Secrets and variables → Actions.
 #
+# Token-issuance gap (deferred to Phase 3):
+#   The staging bridge currently uses the in-memory HermesAuthProvider (no
+#   client_credentials grant) — tokens come from an authorization_code+PKCE
+#   flow only. Until the bridge supports either client_credentials or a
+#   signed long-lived service token, CI cannot mint its own bearer.
+#
+#   Today the workflow runs manually via workflow_dispatch with an operator-
+#   issued token pasted into STAGING_EVAL_TOKEN. The scheduled nightly + PR
+#   triggers will go red until that secret is populated; that is the signal
+#   to land OIDC/Zitadel client_credentials in Phase 3.
+#
 # Why pull_request, not pull_request_target:
 #   pull_request_target would expose STAGING_MCP_URL / STAGING_EVAL_TOKEN to forked-repo
 #   PRs. Using pull_request keeps the secret available only to PRs from branches in this
