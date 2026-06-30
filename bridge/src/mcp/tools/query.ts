@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { randomUUID } from 'node:crypto';
 import type { FinnyEnvelope } from '../../types/envelope.js';
 import { taskManager } from '../tasks/manager.js';
 import { ensureTaskWorker, awaitTaskOrEscalate } from './_shared/taskWorker.js';
@@ -7,6 +8,47 @@ import { detectDestructiveIntent } from './_shared/destructiveIntentGuard.js';
 import { errorEnvelope, refusedEnvelope } from './_shared/envelopeBuilders.js';
 import { lookupIntent } from '../../intents/loader.js';
 import { validateScope } from '../../intents/validateScope.js';
+import type { BlessListEntry } from '../../intents/types.js';
+
+const BRIDGE_VERSION = '0.0.1';
+
+// Synthesize a deterministic `needs_input` envelope from a blessed intent's
+// required_scope. Used by the discover short-circuit (Issue #40): when cowork
+// calls discover for a blessed intent we already know the variables it needs
+// to gather, so we return them directly without round-tripping through
+// Finny's LLM. Removes the q01 eval drift that was caused by Finny's
+// non-deterministic discover output (partial/running/error rotation).
+function synthesizeDiscoverNeedsInput(
+  entry: BlessListEntry,
+  envUsed: 'sandbox' | 'production',
+  sessionId: string
+): FinnyEnvelope {
+  const requiredNames = entry.required_scope.map((v) => v.name);
+  const question =
+    `To run intent '${entry.id}' (v${entry.version}), the following variables are required: ` +
+    `${requiredNames.join(', ')}. Resolve these with the user, then re-call finny_query ` +
+    `with phase: 'execute' and the scope populated.`;
+  return {
+    status: 'needs_input',
+    intent_restated: entry.id,
+    assumptions: [],
+    unanswered: requiredNames,
+    data: null,
+    sources: [],
+    confidence: 'high',
+    confidence_reason:
+      'Deterministic discover short-circuit from bless-list required_scope; no LLM call.',
+    needs_input: {
+      question,
+      conversation_id: randomUUID(),
+      round: 1,
+    },
+    elapsed_ms: 0,
+    env_used: envUsed,
+    bridge_version: BRIDGE_VERSION,
+    finny_session_id: sessionId,
+  };
+}
 
 export const queryInputSchema = z
   .object({
@@ -86,6 +128,18 @@ async function handler(rawInput: QueryInput): Promise<FinnyEnvelope> {
   // Open intents (lookupIntent returns null) skip this gate entirely; Finny
   // handles missing scope downstream via needs_input (Track F) or partial.
   const blessed = lookupIntent(input.intent);
+
+  // Gate 1a — deterministic discover short-circuit (Issue #40).
+  // For blessed intents in discover phase, we already know the required
+  // scope from the bless-list entry. Synthesize a needs_input envelope
+  // synchronously and return — no LLM call, no gateway round-trip. This
+  // removes the non-determinism that surfaced as q01 eval drift (Finny's
+  // discover output rotates between partial/running/error). Non-blessed
+  // discover still falls through to taskManager so Finny answers free-form.
+  if (blessed && input.phase === 'discover') {
+    return synthesizeDiscoverNeedsInput(blessed, envUsed, principal);
+  }
+
   if (blessed && input.phase === 'execute') {
     const result = validateScope(blessed, input.scope);
     if (!result.ok) {
