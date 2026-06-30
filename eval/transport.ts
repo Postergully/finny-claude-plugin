@@ -175,6 +175,17 @@ async function mcpFetch(
   if (token) headers['authorization'] = `Bearer ${token}`;
   if (state.sessionId) headers['mcp-session-id'] = state.sessionId;
 
+  // Optional eval-only loopback bypass. When the bridge has
+  // EVAL_BYPASS_ENABLED=true, the operator can set these env vars on the
+  // capture host (NEVER for prod traffic) to skip OAuth:
+  //   FINNY_EVAL_BYPASS_TOKEN = sha256-hex of bridge's FINNY_UPSTREAM_TOKEN
+  //   FINNY_EVAL_HOST_HEADER  = host the bridge's DNS-rebinding allowlist accepts
+  //                             (e.g., finny.staging.11mirror.com when hitting 127.0.0.1)
+  const bypassTok = process.env.FINNY_EVAL_BYPASS_TOKEN;
+  if (bypassTok) headers['x-finny-eval-token'] = bypassTok;
+  const hostHdr = process.env.FINNY_EVAL_HOST_HEADER;
+  if (hostHdr) headers['host'] = hostHdr;
+
   const httpRes = await fetch(mcpUrl, {
     method: 'POST',
     headers,
