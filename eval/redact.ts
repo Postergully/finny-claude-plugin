@@ -21,7 +21,7 @@ export function redactEnvelope<T>(env: T): T {
     },
   );
   const tasks = new Map<string, string>();
-  raw = raw.replace(/task_[a-z0-9]+_[0-9]+/g, (m) => {
+  raw = raw.replace(/task_[a-z0-9]+_[0-9]+[a-z]*/g, (m) => {
     if (!tasks.has(m)) tasks.set(m, `task_<task-${tasks.size + 1}>`);
     return tasks.get(m)!;
   });
