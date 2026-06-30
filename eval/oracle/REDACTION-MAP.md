@@ -55,29 +55,29 @@ If this command produces any output, the redaction pass is incomplete.
 
 ### q01-vendor-balance-discover
 
-**Status**: drift-prone. Baseline accepts 19/20 pass; q01 is allowed to drift.
+**Status**: FIXED in `feat/discover-short-circuit` (Issue #40, closes drift).
 
-**Why**: The bridge does NOT short-circuit `phase: 'discover'` — it dispatches
-the call to Finny's LLM via the gateway. Finny's discover-time output has three
-legal shapes depending on upstream latency and her own response choice:
+**Fix**: `bridge/src/mcp/tools/query.ts` now short-circuits `phase: 'discover'`
+for blessed intents. When `phase === 'discover'` AND `lookupIntent(intent)`
+returns a bless-list entry, the bridge synthesizes a `needs_input` envelope
+from `entry.required_scope` and returns synchronously. No LLM call, no
+gateway round-trip. Non-blessed intents in `discover` still fall through to
+Finny untouched.
 
-1. `status: 'partial'`, `data.shape: 'narrative'` — discovery narrative
-   returned in time (this is the captured oracle)
-2. `status: 'running'`, `data.value: task_<id>` — discovery exceeded the
-   30s default `deadline_ms`, escalated to async
-3. `status: 'error'`, `error.code: 'internal'` — gateway/transport
-   transient failure
+**Operator follow-up after deploy**:
 
-The captured oracle pins shape (1). Runs that produce (2) or (3) produce a
-high-diff drift verdict, not a `pass`.
+1. Deploy this branch to staging via the normal staging-promotion flow.
+2. Run the staging eval; q01 envelope shape will now be `needs_input` (not
+   `partial`), so the existing captured oracle will diff against the new
+   output. Recapture the oracle for q01 from a staging run that returns the
+   synthesized envelope (drop the `conversation_id` and `elapsed_ms` via
+   the existing redaction pass), then re-run to confirm 20/20 pass.
+3. Once 20/20 baseline is green, open a separate operator-driven PR to flip
+   `.github/workflows/eval-staging.yml --allow-drift` from `1` to `0`. The
+   eval then becomes a real regression gate.
 
-**Right fix (deferred)**: Implement a deterministic discover short-circuit in
-`bridge/src/mcp/tools/query.ts`. When `phase === 'discover'` and the intent is
-in the bless-list, synthesize a `needs_input` envelope from
-`entry.required_scope` in-bridge — no LLM call. This matches the spec's stated
-`expected_envelope_shape: 'needs_input'` for q01 and makes the eval a real
-regression gate. Tracked as a follow-up to Phase 1 Task 1.3.
-
-**Until then**: Phase 2 → Phase 3 gate accepts 19/20 pass as green, with q01
-on a known-drift watchlist.
+**Historical context** (for archaeology): the original drift modes were
+`partial`/`running`/`error` rotation depending on upstream Finny latency;
+the deterministic short-circuit removes Finny from the discover path
+entirely.
 

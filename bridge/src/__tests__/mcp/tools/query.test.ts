@@ -100,3 +100,98 @@ describe('finny_query — async handler (Task 2 rewrite)', () => {
     ).rejects.toThrow();
   });
 });
+
+// ─── Issue #40 — deterministic discover short-circuit ─────────────────
+//
+// When phase=discover AND intent is blessed, the bridge synthesizes a
+// needs_input envelope from entry.required_scope and returns synchronously.
+// No LLM call, no gateway round-trip. This removes the non-determinism
+// that surfaced as q01 eval drift.
+describe('finny_query — discover short-circuit (Issue #40)', () => {
+  beforeEach(() => {
+    runQueryMock.mockReset();
+  });
+
+  it('blessed intent + discover → synthesized needs_input envelope, ZERO gateway calls', async () => {
+    const res = await queryTool.handler({
+      intent: 'vendor_balance',
+      phase: 'discover',
+      expected_shape: 'scalar',
+      max_tokens: 2000,
+      deadline_ms: 5_000,
+      clarifications_resolved: [],
+    });
+
+    expect(res.status).toBe('needs_input');
+    expect(res.data).toBeNull();
+    expect(res.intent_restated).toBe('vendor_balance');
+    expect(res.confidence).toBe('high');
+    expect(res.needs_input).toBeDefined();
+    expect(res.needs_input?.round).toBe(1);
+    expect(typeof res.needs_input?.conversation_id).toBe('string');
+    expect(res.needs_input?.question).toContain('vendor_balance');
+
+    // required_vars must come from the bless-list entry, not be invented.
+    // vendor_balance v1.0 declares required_scope = [vendor_ref, env].
+    expect(res.unanswered).toEqual(['vendor_ref', 'env']);
+
+    // Critical: NO gateway dispatch on the short-circuit path.
+    expect(runQueryMock).not.toHaveBeenCalled();
+
+    // Envelope must validate against the wire schema.
+    expect(FinnyEnvelopeSchema.safeParse(res).success).toBe(true);
+  });
+
+  it('non-blessed intent + discover → falls through to runQuery (no short-circuit)', async () => {
+    runQueryMock.mockResolvedValue({
+      status: 'ok',
+      intent_restated: 'open-string',
+      assumptions: [],
+      unanswered: [],
+      data: { shape: 'narrative', narrative: 'open intent discover answer' },
+      sources: [],
+      confidence: 'medium',
+      confidence_reason: 'open',
+      elapsed_ms: 1,
+      env_used: 'production',
+      bridge_version: '0.0.1',
+      finny_session_id: 'sess',
+    });
+
+    const res = await queryTool.handler({
+      intent: 'reconciliation_helper', // not in bless-list
+      phase: 'discover',
+      user_question: 'help me reconcile',
+      expected_shape: 'narrative',
+      max_tokens: 2000,
+      deadline_ms: 5_000,
+      clarifications_resolved: [],
+    });
+
+    expect(res.status).toBe('ok');
+    expect(runQueryMock).toHaveBeenCalledTimes(1);
+    const callParams = runQueryMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(callParams.phase).toBe('discover');
+    expect(callParams.blessed).toBeUndefined();
+  });
+
+  it('blessed intent + execute (complete scope) → dispatches normally, NOT short-circuited', async () => {
+    runQueryMock.mockResolvedValue(makeOkEnvelope());
+
+    const res = await queryTool.handler({
+      intent: 'vendor_balance',
+      phase: 'execute',
+      scope: { vendor_ref: 'Acme Corp', env: 'production' },
+      expected_shape: 'scalar',
+      max_tokens: 2000,
+      deadline_ms: 5_000,
+      clarifications_resolved: [],
+    });
+
+    expect(res.status).toBe('ok');
+    expect(runQueryMock).toHaveBeenCalledTimes(1);
+    const callParams = runQueryMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(callParams.phase).toBe('execute');
+    expect((callParams.blessed as { id: string }).id).toBe('vendor_balance');
+  });
+});

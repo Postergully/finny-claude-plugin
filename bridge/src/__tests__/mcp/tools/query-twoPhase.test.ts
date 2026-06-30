@@ -164,9 +164,11 @@ describe('Track E — bless-list scope enforcement on execute phase', () => {
 });
 
 describe('Track E — discover phase routing', () => {
-  it('blessed intent + discover (no scope) → reaches runQuery, NO scope validation', async () => {
-    runQueryMock.mockResolvedValue(makeOkNarrative());
-
+  // Issue #40: blessed + discover now short-circuits to a synthesized
+  // needs_input envelope (no gateway dispatch). The detailed assertions
+  // for the short-circuit live in query.test.ts; this case just guards
+  // the routing decision so a regression here would surface immediately.
+  it('blessed intent + discover → short-circuit, NO runQuery dispatch (Issue #40)', async () => {
     const res = await queryTool.handler({
       intent: 'p&l_statement',
       phase: 'discover',
@@ -177,14 +179,9 @@ describe('Track E — discover phase routing', () => {
       clarifications_resolved: [],
     });
 
-    expect(res.status).toBe('ok');
-    expect(res.data?.shape).toBe('narrative');
-    expect(runQueryMock).toHaveBeenCalledTimes(1);
-    const callParams = runQueryMock.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(callParams.phase).toBe('discover');
-    expect(callParams.intent_string).toBe('p&l_statement');
-    expect(callParams.question).toBe('give me P&L');
-    expect((callParams.blessed as { id: string }).id).toBe('p&l_statement');
+    expect(res.status).toBe('needs_input');
+    expect(res.intent_restated).toBe('p&l_statement');
+    expect(runQueryMock).not.toHaveBeenCalled();
   });
 });
 
