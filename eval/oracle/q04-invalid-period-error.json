@@ -12,7 +12,7 @@
     "message": "Missing required scope for intent 'vendor_balance' (v1.0): vendor_ref, env. Call finny_query again with phase: 'discover' for guidance on these variables.",
     "retryable": true
   },
-  "elapsed_ms": 0,
+  "elapsed_ms": "<duration-ms>",
   "env_used": "production",
   "bridge_version": "0.0.1",
   "finny_session_id": "—"

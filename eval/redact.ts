@@ -25,5 +25,8 @@ export function redactEnvelope<T>(env: T): T {
     if (!tasks.has(m)) tasks.set(m, `task_<task-${tasks.size + 1}>`);
     return tasks.get(m)!;
   });
+  // Normalize volatile timing fields. Real elapsed_ms varies run-to-run and is
+  // not part of the semantic envelope being tested.
+  raw = raw.replace(/"elapsed_ms":\s*[0-9]+/g, '"elapsed_ms": "<duration-ms>"');
   return JSON.parse(raw) as T;
 }

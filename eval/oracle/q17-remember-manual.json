@@ -10,7 +10,7 @@
   "sources": [],
   "confidence": "high",
   "confidence_reason": "Forwarded to Finny with remember system prompt; persistence handled by her memory writer.",
-  "elapsed_ms": 11125,
+  "elapsed_ms": "<duration-ms>",
   "env_used": "production",
   "bridge_version": "0.0.1",
   "finny_session_id": "finny-<session-1>"

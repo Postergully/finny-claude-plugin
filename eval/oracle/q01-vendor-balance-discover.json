@@ -24,7 +24,7 @@
   ],
   "confidence": "medium",
   "confidence_reason": "Intent and logic are well-defined from memory, but vendor_ref is missing so no live data or entity resolution was possible.",
-  "elapsed_ms": 14619,
+  "elapsed_ms": "<duration-ms>",
   "env_used": "production",
   "bridge_version": "0.0.1",
   "finny_session_id": "finny-<session-1>"

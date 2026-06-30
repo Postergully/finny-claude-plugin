@@ -12,7 +12,7 @@
     "message": "Unknown or expired cursor: cursor:does-not-exist. Cursors expire 10 minutes after creation; restart from finny_query.",
     "retryable": false
   },
-  "elapsed_ms": 0,
+  "elapsed_ms": "<duration-ms>",
   "env_used": "production",
   "bridge_version": "0.0.1",
   "finny_session_id": "—"

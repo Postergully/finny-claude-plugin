@@ -12,7 +12,7 @@
     "message": "Unknown or expired conversation_id: conv:opaque-id-1. Restart from finny_query (the bridge keeps conversations in memory only; 30-min idle eviction or bridge restart drops in-flight conversations).",
     "retryable": false
   },
-  "elapsed_ms": 0,
+  "elapsed_ms": "<duration-ms>",
   "env_used": "production",
   "bridge_version": "0.0.1",
   "finny_session_id": "—"

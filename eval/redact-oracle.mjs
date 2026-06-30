@@ -24,6 +24,7 @@ function redactRaw(raw) {
     if (!tasks.has(m)) tasks.set(m, `task_<task-${tasks.size + 1}>`);
     return tasks.get(m);
   });
+  out = out.replace(/"elapsed_ms":\s*[0-9]+/g, '"elapsed_ms": "<duration-ms>"');
   return { out, sessions: sessions.size, tasks: tasks.size };
 }
 

@@ -12,7 +12,7 @@
     "message": "Missing required params for report vendor_balance: vendor_name",
     "retryable": false
   },
-  "elapsed_ms": 0,
+  "elapsed_ms": "<duration-ms>",
   "env_used": "production",
   "bridge_version": "0.0.1",
   "finny_session_id": "m2-default:production"
