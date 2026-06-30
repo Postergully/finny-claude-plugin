@@ -1,0 +1,181 @@
+[
+  {
+    "id": "q01-vendor-balance-discover",
+    "status": "drift",
+    "diff": [
+      {
+        "path": "status",
+        "oracle": "partial",
+        "got": "running"
+      },
+      {
+        "path": "intent_restated",
+        "oracle": "Retrieve the open vendor balance for a specific vendor in <company>'s NetSuite environment.",
+        "got": "vendor_balance"
+      },
+      {
+        "path": "assumptions[0]",
+        "oracle": "env defaults to production unless sandbox is explicitly requested"
+      },
+      {
+        "path": "assumptions[1]",
+        "oracle": "Open balance includes VendBill (status IN ('A','D')), Vendor Prepayments, Journal entries, and Bill Credits per canonical definition"
+      },
+      {
+        "path": "assumptions[2]",
+        "oracle": "Sign convention: AP balances shown as positive (amount owed to vendor), credits shown as negative"
+      },
+      {
+        "path": "assumptions[3]",
+        "oracle": "Subsidiary scope: <entity-1> (primary) unless another subsidiary is specified"
+      },
+      {
+        "path": "unanswered[0]",
+        "oracle": "vendor_ref: no vendor name, ID, or GSTIN provided — cannot identify which vendor to query"
+      },
+      {
+        "path": "unanswered[1]",
+        "oracle": "env: not specified — defaulting to production, but sandbox may be intended"
+      },
+      {
+        "path": "data.shape",
+        "oracle": "narrative",
+        "got": "scalar"
+      },
+      {
+        "path": "data.narrative",
+        "oracle": "The vendor_balance intent returns the total open amount <company> owes to a specific vendor. It aggregates across four transaction types: Vendor Bills with status A (approved/open) or D (draft), Vendor Prepayments, Journal entries affecting the vendor's AP account, and Bill Credits. Using status='A' alone would miss drafts that are already accrued liabilities — both A and D are counted as open.\n\nTo run this, two variables are needed:\n\n1. vendor_ref — identifies which vendor to look up. This can be a vendor name (partial match supported), an internal NetSuite vendor ID, or a GSTIN. If the name matches multiple vendors and no GSTIN is provided, the system will return the candidate list and ask you to pick one. GSTIN lookup goes through a separate REST path (tax registration), not SuiteQL.\n\n2. env — whether to query production (live AP data) or sandbox (test environment). Production is the default. Sandbox figures will not match live AP.\n\nExample clarifying questions cowork can ask:\n- Which vendor are you checking the balance for? (Name, vendor ID, or GSTIN)\n- Should this be pulled from production or sandbox?\n- Do you want the balance broken down by transaction type (bills, prepayments, credits), or just the net total?\n- Are you looking at a specific subsidiary, or <entity-1> (<company>'s primary entity)?"
+      },
+      {
+        "path": "data.value",
+        "got": "task_<task-1>"
+      },
+      {
+        "path": "data.rendered_markdown",
+        "got": "{\"task_id\":\"task_<task-1>\",\"deadline_exceeded_ms\":30000}"
+      },
+      {
+        "path": "sources[0]",
+        "oracle": {
+          "kind": "memory",
+          "ref": "AGENTS.md vendor_balance intent definition + MEMORY.md open-balance canonical rule",
+          "rows_scanned": 0
+        }
+      },
+      {
+        "path": "confidence",
+        "oracle": "medium",
+        "got": "low"
+      },
+      {
+        "path": "confidence_reason",
+        "oracle": "Intent and logic are well-defined from memory, but vendor_ref is missing so no live data or entity resolution was possible.",
+        "got": "Task still running — poll with finny_task_status using data.value.task_id"
+      },
+      {
+        "path": "finny_session_id",
+        "oracle": "finny-<session-1>",
+        "got": "m2-default:production"
+      },
+      {
+        "path": "task_id",
+        "got": "task_<task-1>"
+      }
+    ]
+  },
+  {
+    "id": "q02-vendor-balance-execute",
+    "status": "pass",
+    "diff": []
+  },
+  {
+    "id": "q03-freeform-narrative-sandbox",
+    "status": "pass",
+    "diff": []
+  },
+  {
+    "id": "q04-invalid-period-error",
+    "status": "pass",
+    "diff": []
+  },
+  {
+    "id": "q05-report-vendor-balance",
+    "status": "pass",
+    "diff": []
+  },
+  {
+    "id": "q06-report-open-bills",
+    "status": "pass",
+    "diff": []
+  },
+  {
+    "id": "q07-report-bill-detail",
+    "status": "pass",
+    "diff": []
+  },
+  {
+    "id": "q08-report-vendor-summary",
+    "status": "pass",
+    "diff": []
+  },
+  {
+    "id": "q09-report-gstin-lookup",
+    "status": "pass",
+    "diff": []
+  },
+  {
+    "id": "q10-report-po-status-sandbox",
+    "status": "pass",
+    "diff": []
+  },
+  {
+    "id": "q11-report-unknown-vendor-error",
+    "status": "pass",
+    "diff": []
+  },
+  {
+    "id": "q12-report-missing-required-param-error",
+    "status": "pass",
+    "diff": []
+  },
+  {
+    "id": "q13-continue-cursor-drain",
+    "status": "pass",
+    "diff": []
+  },
+  {
+    "id": "q14-continue-conversation-needs-input",
+    "status": "pass",
+    "diff": []
+  },
+  {
+    "id": "q15-continue-invalid-cursor-error",
+    "status": "pass",
+    "diff": []
+  },
+  {
+    "id": "q16-remember-cowork",
+    "status": "pass",
+    "diff": []
+  },
+  {
+    "id": "q17-remember-manual",
+    "status": "pass",
+    "diff": []
+  },
+  {
+    "id": "q18-task-status-known",
+    "status": "pass",
+    "diff": []
+  },
+  {
+    "id": "q19-task-status-unknown-error",
+    "status": "pass",
+    "diff": []
+  },
+  {
+    "id": "q20-query-paginated-rows-issues-cursor",
+    "status": "pass",
+    "diff": []
+  }
+]
