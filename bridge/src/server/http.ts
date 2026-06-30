@@ -368,6 +368,10 @@ export async function createHttpServer(
         remote === '::ffff:127.0.0.1' ||
         remote === '';
       const hdr = req.header('x-finny-eval-token') ?? '';
+      // eslint-disable-next-line no-console
+      console.error(
+        `[eval-bypass] remote=${remote} isLoopback=${isLoopback} hdrLen=${hdr.length} expectedLen=${expectedDigest.length}`
+      );
       if (isLoopback && hdr.length === expectedDigest.length) {
         const enc = new TextEncoder();
         const a = enc.encode(hdr);
