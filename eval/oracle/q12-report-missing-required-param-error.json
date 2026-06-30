@@ -1,0 +1,19 @@
+{
+  "status": "error",
+  "intent_restated": "Run report bill_detail",
+  "assumptions": [],
+  "unanswered": [],
+  "data": null,
+  "sources": [],
+  "confidence": "low",
+  "confidence_reason": "Missing required params for report bill_detail: bill_id",
+  "error": {
+    "code": "internal",
+    "message": "Missing required params for report bill_detail: bill_id",
+    "retryable": false
+  },
+  "elapsed_ms": 0,
+  "env_used": "production",
+  "bridge_version": "0.0.1",
+  "finny_session_id": "m2-default:production"
+}

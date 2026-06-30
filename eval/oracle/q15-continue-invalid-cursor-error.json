@@ -1,0 +1,19 @@
+{
+  "status": "error",
+  "intent_restated": "finny_continue",
+  "assumptions": [],
+  "unanswered": [],
+  "data": null,
+  "sources": [],
+  "confidence": "low",
+  "confidence_reason": "Unknown or expired cursor: cursor:does-not-exist. Cursors expire 10 minutes after creation; restart from finny_query.",
+  "error": {
+    "code": "other",
+    "message": "Unknown or expired cursor: cursor:does-not-exist. Cursors expire 10 minutes after creation; restart from finny_query.",
+    "retryable": false
+  },
+  "elapsed_ms": 0,
+  "env_used": "production",
+  "bridge_version": "0.0.1",
+  "finny_session_id": "—"
+}

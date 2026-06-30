@@ -1,0 +1,19 @@
+{
+  "status": "error",
+  "intent_restated": "Run report po_status",
+  "assumptions": [],
+  "unanswered": [],
+  "data": null,
+  "sources": [],
+  "confidence": "low",
+  "confidence_reason": "Missing required params for report po_status: po_number",
+  "error": {
+    "code": "internal",
+    "message": "Missing required params for report po_status: po_number",
+    "retryable": false
+  },
+  "elapsed_ms": 0,
+  "env_used": "sandbox",
+  "bridge_version": "0.0.1",
+  "finny_session_id": "m2-default:sandbox"
+}

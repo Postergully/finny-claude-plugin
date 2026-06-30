@@ -1,0 +1,31 @@
+{
+  "status": "partial",
+  "intent_restated": "Retrieve the open vendor balance for a specific vendor in <company>'s NetSuite environment.",
+  "assumptions": [
+    "env defaults to production unless sandbox is explicitly requested",
+    "Open balance includes VendBill (status IN ('A','D')), Vendor Prepayments, Journal entries, and Bill Credits per canonical definition",
+    "Sign convention: AP balances shown as positive (amount owed to vendor), credits shown as negative",
+    "Subsidiary scope: <entity-1> (primary) unless another subsidiary is specified"
+  ],
+  "unanswered": [
+    "vendor_ref: no vendor name, ID, or GSTIN provided — cannot identify which vendor to query",
+    "env: not specified — defaulting to production, but sandbox may be intended"
+  ],
+  "data": {
+    "shape": "narrative",
+    "narrative": "The vendor_balance intent returns the total open amount <company> owes to a specific vendor. It aggregates across four transaction types: Vendor Bills with status A (approved/open) or D (draft), Vendor Prepayments, Journal entries affecting the vendor's AP account, and Bill Credits. Using status='A' alone would miss drafts that are already accrued liabilities — both A and D are counted as open.\n\nTo run this, two variables are needed:\n\n1. vendor_ref — identifies which vendor to look up. This can be a vendor name (partial match supported), an internal NetSuite vendor ID, or a GSTIN. If the name matches multiple vendors and no GSTIN is provided, the system will return the candidate list and ask you to pick one. GSTIN lookup goes through a separate REST path (tax registration), not SuiteQL.\n\n2. env — whether to query production (live AP data) or sandbox (test environment). Production is the default. Sandbox figures will not match live AP.\n\nExample clarifying questions cowork can ask:\n- Which vendor are you checking the balance for? (Name, vendor ID, or GSTIN)\n- Should this be pulled from production or sandbox?\n- Do you want the balance broken down by transaction type (bills, prepayments, credits), or just the net total?\n- Are you looking at a specific subsidiary, or <entity-1> (<company>'s primary entity)?"
+  },
+  "sources": [
+    {
+      "kind": "memory",
+      "ref": "AGENTS.md vendor_balance intent definition + MEMORY.md open-balance canonical rule",
+      "rows_scanned": 0
+    }
+  ],
+  "confidence": "medium",
+  "confidence_reason": "Intent and logic are well-defined from memory, but vendor_ref is missing so no live data or entity resolution was possible.",
+  "elapsed_ms": 14619,
+  "env_used": "production",
+  "bridge_version": "0.0.1",
+  "finny_session_id": "finny-<session-1>"
+}

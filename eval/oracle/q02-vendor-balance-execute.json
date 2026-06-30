@@ -1,0 +1,19 @@
+{
+  "status": "error",
+  "intent_restated": "vendor_balance",
+  "assumptions": [],
+  "unanswered": [],
+  "data": null,
+  "sources": [],
+  "confidence": "low",
+  "confidence_reason": "Missing required scope for intent 'vendor_balance' (v1.0): vendor_ref, env. Call finny_query again with phase: 'discover' for guidance on these variables.",
+  "error": {
+    "code": "wrong_tool",
+    "message": "Missing required scope for intent 'vendor_balance' (v1.0): vendor_ref, env. Call finny_query again with phase: 'discover' for guidance on these variables.",
+    "retryable": true
+  },
+  "elapsed_ms": 0,
+  "env_used": "production",
+  "bridge_version": "0.0.1",
+  "finny_session_id": "—"
+}

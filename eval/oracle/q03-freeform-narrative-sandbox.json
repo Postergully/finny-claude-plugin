@@ -1,0 +1,19 @@
+{
+  "status": "running",
+  "intent_restated": "Summarize the top 5 vendors by spend last quarter.",
+  "assumptions": [],
+  "unanswered": [],
+  "data": {
+    "shape": "scalar",
+    "value": "task_<task-1>",
+    "rendered_markdown": "{\"task_id\":\"task_<task-1>\",\"deadline_exceeded_ms\":30000}"
+  },
+  "sources": [],
+  "confidence": "low",
+  "confidence_reason": "Task still running — poll with finny_task_status using data.value.task_id",
+  "task_id": "task_<task-1>",
+  "elapsed_ms": 30023,
+  "env_used": "sandbox",
+  "bridge_version": "0.0.1",
+  "finny_session_id": "m2-default:sandbox"
+}
