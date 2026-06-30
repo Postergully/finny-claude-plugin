@@ -28,5 +28,12 @@ export function redactEnvelope<T>(env: T): T {
   // Normalize volatile timing fields. Real elapsed_ms varies run-to-run and is
   // not part of the semantic envelope being tested.
   raw = raw.replace(/"elapsed_ms":\s*[0-9]+/g, '"elapsed_ms": "<duration-ms>"');
+  // Normalize conversation_id. The discover short-circuit (Issue #40) emits a
+  // raw randomUUID() per call; conversationStore emits `conv-<uuid>`. Both
+  // forms are run-to-run volatile and not part of the semantic envelope.
+  raw = raw.replace(
+    /"conversation_id":\s*"(?:conv-)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"/g,
+    '"conversation_id":"<conversation-id>"',
+  );
   return JSON.parse(raw) as T;
 }

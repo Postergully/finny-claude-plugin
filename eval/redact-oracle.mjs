@@ -25,6 +25,13 @@ function redactRaw(raw) {
     return tasks.get(m);
   });
   out = out.replace(/"elapsed_ms":\s*[0-9]+/g, '"elapsed_ms": "<duration-ms>"');
+  // Mirror of redact.ts: normalize conversation_id (raw UUID from discover
+  // short-circuit OR `conv-<uuid>` from conversationStore). Volatile, not
+  // semantic.
+  out = out.replace(
+    /"conversation_id":\s*"(?:conv-)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"/g,
+    '"conversation_id":"<conversation-id>"',
+  );
   return { out, sessions: sessions.size, tasks: tasks.size };
 }
 
