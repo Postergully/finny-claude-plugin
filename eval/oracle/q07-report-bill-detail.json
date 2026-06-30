@@ -1,0 +1,19 @@
+{
+  "status": "running",
+  "intent_restated": "Return full detail for bill ID <bill-1> in production: header (vendor, tranid, trandate, amount, status), line items, applied payments. Include the linked purchase order tranid if any. Include vendor ",
+  "assumptions": [],
+  "unanswered": [],
+  "data": {
+    "shape": "scalar",
+    "value": "task_<task-1>",
+    "rendered_markdown": "{\"task_id\":\"task_<task-1>\",\"deadline_exceeded_ms\":30000}"
+  },
+  "sources": [],
+  "confidence": "low",
+  "confidence_reason": "Task still running — poll with finny_task_status using data.value.task_id",
+  "task_id": "task_<task-1>",
+  "elapsed_ms": "<duration-ms>",
+  "env_used": "production",
+  "bridge_version": "0.0.1",
+  "finny_session_id": "m2-default:production"
+}

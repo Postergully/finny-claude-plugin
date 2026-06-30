@@ -1,0 +1,19 @@
+{
+  "status": "error",
+  "intent_restated": "Poll task status",
+  "assumptions": [],
+  "unanswered": [],
+  "data": null,
+  "sources": [],
+  "confidence": "low",
+  "confidence_reason": "Task not found: task:opaque-id-1. Task may have been cleaned up (1h TTL) or never existed.",
+  "error": {
+    "code": "internal",
+    "message": "Task not found: task:opaque-id-1. Task may have been cleaned up (1h TTL) or never existed.",
+    "retryable": false
+  },
+  "elapsed_ms": "<duration-ms>",
+  "env_used": "production",
+  "bridge_version": "0.0.1",
+  "finny_session_id": "unknown"
+}

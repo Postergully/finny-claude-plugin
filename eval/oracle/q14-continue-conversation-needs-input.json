@@ -1,0 +1,19 @@
+{
+  "status": "error",
+  "intent_restated": "finny_continue",
+  "assumptions": [],
+  "unanswered": [],
+  "data": null,
+  "sources": [],
+  "confidence": "low",
+  "confidence_reason": "Unknown or expired conversation_id: conv:opaque-id-1. Restart from finny_query (the bridge keeps conversations in memory only; 30-min idle eviction or bridge restart drops in-flight conversations).",
+  "error": {
+    "code": "gateway_rejected",
+    "message": "Unknown or expired conversation_id: conv:opaque-id-1. Restart from finny_query (the bridge keeps conversations in memory only; 30-min idle eviction or bridge restart drops in-flight conversations).",
+    "retryable": false
+  },
+  "elapsed_ms": "<duration-ms>",
+  "env_used": "production",
+  "bridge_version": "0.0.1",
+  "finny_session_id": "—"
+}

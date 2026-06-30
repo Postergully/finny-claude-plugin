@@ -17,7 +17,7 @@
  * - Graceful shutdown
  */
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse, Server as HttpServer } from 'node:http';
 import type { Request, Response, NextFunction } from 'express';
 import express from 'express';
@@ -344,6 +344,53 @@ export async function createHttpServer(
     // clients (Claude.ai, Inspector) can discover the OAuth server from a 401.
     const resourceMetadataUrl = `${issuerUrl.toString().replace(/\/$/, '')}/.well-known/oauth-protected-resource/mcp`;
     authMiddleware = requireBearerAuth({ verifier: provider, resourceMetadataUrl });
+  }
+
+  // Eval-only loopback bypass: lets `eval/capture-oracle.ts` reach /mcp from
+  // localhost without obtaining a real OAuth bearer. Gated by env so it is
+  // strictly opt-in per environment, and by a SHA-256-of-shared-secret header
+  // so an attacker who can reach 127.0.0.1 (e.g., a co-located process) still
+  // can't bypass without the bridge's FINNY_UPSTREAM_TOKEN. The synthetic
+  // AuthInfo matches the in-memory provider's shape so downstream tool
+  // handlers see a normal authenticated request. NEVER enable in prod.
+  if (authMiddleware && process.env.EVAL_BYPASS_ENABLED === 'true') {
+    const upstream = process.env.FINNY_UPSTREAM_TOKEN ?? '';
+    if (!upstream) {
+      throw new Error('EVAL_BYPASS_ENABLED=true but FINNY_UPSTREAM_TOKEN is empty');
+    }
+    const expectedDigest = createHash('sha256').update(upstream).digest('hex');
+    const wrapped = authMiddleware;
+    authMiddleware = (req: Request, res: Response, next: NextFunction): void => {
+      const remote = req.ip ?? req.socket.remoteAddress ?? '';
+      const isLoopback =
+        remote === '127.0.0.1' ||
+        remote === '::1' ||
+        remote === '::ffff:127.0.0.1' ||
+        remote === '';
+      const hdr = req.header('x-finny-eval-token') ?? '';
+      if (isLoopback && hdr.length === expectedDigest.length) {
+        const enc = new TextEncoder();
+        const a = enc.encode(hdr);
+        const b = enc.encode(expectedDigest);
+        if (a.byteLength === b.byteLength && timingSafeEqual(a, b)) {
+          // Synthetic auth context. clientId/sub/email are eval-only sentinels;
+          // they let access-log and tool handlers see a stable identity without
+          // implying a real user.
+          (req as Request & { auth?: unknown }).auth = {
+            token: 'eval-bypass',
+            clientId: 'finny-eval',
+            scopes: ['openid', 'profile', 'email'],
+            expiresAt: Math.floor(Date.now() / 1000) + 60,
+            extra: {
+              email: 'finny-eval@local',
+              sub: 'finny-eval',
+            },
+          };
+          return next();
+        }
+      }
+      return wrapped(req, res, next);
+    };
   }
 
   // --- Health check (no auth) ---

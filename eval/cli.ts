@@ -23,6 +23,10 @@ interface CliArgs {
   queries: string;
   out: string;
   token?: string;
+  // Budget for non-pass results. Defaults to 0 (strict). Set to N>0 to tolerate
+  // known-flake queries (e.g. q01 today, tracked in #40). The runner still
+  // writes the full report; only the exit code is affected.
+  allowDrift: number;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -36,6 +40,13 @@ function parseArgs(argv: string[]): CliArgs {
       case '--queries': a.queries = v; i++; break;
       case '--out': a.out = v; i++; break;
       case '--token': a.token = v; i++; break;
+      case '--allow-drift':
+        a.allowDrift = Number.parseInt(v ?? '0', 10);
+        if (!Number.isFinite(a.allowDrift) || a.allowDrift < 0) {
+          printHelpAndExit(2, `--allow-drift must be a non-negative integer; got ${v}`);
+        }
+        i++;
+        break;
       case '-h':
       case '--help':
         printHelpAndExit(0);
@@ -45,6 +56,7 @@ function parseArgs(argv: string[]): CliArgs {
     printHelpAndExit(2, 'missing required flag');
   }
   a.token = a.token || process.env.FINNY_EVAL_TOKEN;
+  if (a.allowDrift === undefined) a.allowDrift = 0;
   return a as CliArgs;
 }
 
@@ -60,6 +72,8 @@ function printHelpAndExit(code: number, msg?: string): never {
       '  --queries  Path to canonical-queries.json',
       '  --out      Path to write the run report (JSON array)',
       '  --token    Bearer token (or set FINNY_EVAL_TOKEN env var). Optional.',
+      '  --allow-drift N   Allow up to N drift verdicts before exit 1. Defaults to 0.',
+      '                    Hard fails (no oracle, shape mismatch) always trip exit 1.',
     ].join('\n'),
   );
   process.exit(code);
@@ -116,10 +130,23 @@ async function main(): Promise<void> {
   writeFileSync(resolve(args.out), JSON.stringify(results, null, 2));
 
   const failed = results.filter((r) => r.status !== 'pass').length;
+  const drifts = results.filter((r) => r.status === 'drift').length;
+  const hardFails = results.filter((r) => r.status === 'fail').length;
   console.log(
-    `eval: ${results.length - failed}/${results.length} pass · ${failed} non-pass · written to ${args.out}`,
+    `eval: ${results.length - failed}/${results.length} pass · ${failed} non-pass (${drifts} drift, ${hardFails} fail) · written to ${args.out}`,
   );
-  process.exit(failed === 0 ? 0 : 1);
+  // Hard fails (no-oracle, shape mismatch) always trip the gate. Drifts are
+  // allowed up to args.allowDrift to tolerate known-flake queries.
+  if (hardFails > 0 || drifts > args.allowDrift) {
+    if (args.allowDrift > 0) {
+      console.log(`eval: budget --allow-drift ${args.allowDrift} exceeded by ${drifts - args.allowDrift}`);
+    }
+    process.exit(1);
+  }
+  if (drifts > 0) {
+    console.log(`eval: ${drifts} drift within budget --allow-drift ${args.allowDrift}; exit 0`);
+  }
+  process.exit(0);
 }
 
 main().catch((err) => {

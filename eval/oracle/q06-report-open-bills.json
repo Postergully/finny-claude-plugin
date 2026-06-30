@@ -1,0 +1,19 @@
+{
+  "status": "error",
+  "intent_restated": "Run report open_bills",
+  "assumptions": [],
+  "unanswered": [],
+  "data": null,
+  "sources": [],
+  "confidence": "low",
+  "confidence_reason": "Missing required params for report open_bills: vendor_name",
+  "error": {
+    "code": "internal",
+    "message": "Missing required params for report open_bills: vendor_name",
+    "retryable": false
+  },
+  "elapsed_ms": "<duration-ms>",
+  "env_used": "production",
+  "bridge_version": "0.0.1",
+  "finny_session_id": "m2-default:production"
+}

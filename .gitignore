@@ -10,3 +10,5 @@ server-dist/
 .idea/
 coverage/
 .turbo/
+.gstack/
+.claude/

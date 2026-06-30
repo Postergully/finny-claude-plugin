@@ -3,6 +3,8 @@
 // dependency-free, smaller blast radius. The rubric only requires "diff payload non-empty
 // on drift", which a path/value diff trivially satisfies.
 
+import { redactEnvelope } from './redact.ts';
+
 export interface EvalQuery {
   id: string;
   tool: string;
@@ -100,7 +102,12 @@ function structuralDiff(oracle: unknown, got: unknown, path = ''): DiffEntry[] {
 export async function runEval(args: EvalArgs): Promise<EvalResult[]> {
   const out: EvalResult[] = [];
   for (const q of args.queries) {
-    const got = await args.fetchEnvelope(q);
+    const rawGot = await args.fetchEnvelope(q);
+    // Apply the same redaction pass to the runtime envelope that the oracle
+    // already went through (see eval/redact.ts + REDACTION-MAP.md). Without
+    // this, volatile fields (task_id, finny_session_id, …) cause `drift`
+    // verdicts for what are otherwise equivalent envelopes.
+    const got = redactEnvelope(rawGot);
     const oracleEnv = args.oracle[q.id];
 
     if (!oracleEnv) {
