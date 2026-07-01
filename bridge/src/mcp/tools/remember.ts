@@ -17,6 +17,12 @@ import { errorEnvelope } from './_shared/envelopeBuilders.js';
 import { getOrCreateSession } from './_shared/sessionStore.js';
 import { classifyError } from './_shared/classifyError.js';
 import { logGatewayCall } from './_shared/gatewayLog.js';
+import {
+  derivePrincipal,
+  PrincipalError,
+  unauthorizedEnvelope,
+  type Session,
+} from './_shared/principal.js';
 
 const BRIDGE_VERSION = '0.0.1';
 
@@ -43,8 +49,20 @@ function getModel(): string {
   return process.env.FINNY_MODEL || DEFAULT_MODEL;
 }
 
-async function handler(rawInput: RememberInput): Promise<FinnyEnvelope> {
+async function handler(rawInput: RememberInput, session?: Session): Promise<FinnyEnvelope> {
   const input = rememberInputSchema.parse(rawInput);
+
+  // Task 4.3 — sealed identity gate. Per-bank write enforcement
+  // (canWriteBank) fires at the point of bank access, which for
+  // remember happens inside Finny's memory writer — not in the bridge.
+  // When a future task hoists the bank ID into the bridge dispatcher,
+  // add the canWriteBank call at that exact site.
+  try {
+    await derivePrincipal(session);
+  } catch (e) {
+    if (e instanceof PrincipalError) return unauthorizedEnvelope('finny_remember');
+    throw e;
+  }
 
   const sessionPrincipal = `remember-${input.source}:production`;
   const sessionId = getOrCreateSession(sessionPrincipal);

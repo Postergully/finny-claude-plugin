@@ -2,6 +2,12 @@ import { z } from 'zod';
 import { taskManager } from '../tasks/manager.js';
 import { errorEnvelope, runningEnvelope, refusedEnvelope } from './_shared/envelopeBuilders.js';
 import type { FinnyEnvelope } from '../../types/envelope.js';
+import {
+  derivePrincipal,
+  PrincipalError,
+  unauthorizedEnvelope,
+  type Session,
+} from './_shared/principal.js';
 
 export const taskStatusInputSchema = z.object({
   task_id: z.string().min(1),
@@ -14,8 +20,18 @@ export const taskStatusTool = {
   description:
     'Poll a running Finny task (returned by finny_query or finny_report when deadline_ms was exceeded). Returns the envelope when done, or running status with elapsed_ms.',
   inputSchema: taskStatusInputSchema,
-  handler: async (rawInput: TaskStatusInput): Promise<FinnyEnvelope> => {
+  handler: async (rawInput: TaskStatusInput, session?: Session): Promise<FinnyEnvelope> => {
     const input = taskStatusInputSchema.parse(rawInput);
+
+    // Task 4.3 — identity gate at boundary. No bank check here: this
+    // tool only polls task state; it does not fan out to any bank.
+    try {
+      await derivePrincipal(session);
+    } catch (e) {
+      if (e instanceof PrincipalError) return unauthorizedEnvelope('finny_task_status');
+      throw e;
+    }
+
     const task = taskManager.get(input.task_id);
 
     if (!task) {

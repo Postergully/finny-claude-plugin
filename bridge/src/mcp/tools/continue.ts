@@ -11,6 +11,12 @@ import {
   getConversation,
 } from './_shared/conversationStore.js';
 import { storeCursor, takeCursor } from './_shared/cursorStore.js';
+import {
+  derivePrincipal,
+  PrincipalError,
+  unauthorizedEnvelope,
+  type Session,
+} from './_shared/principal.js';
 
 // Cap the number of needs_input rounds before forcing a partial envelope.
 // Three rounds is the v1 default per spec §8 — revisit after telemetry.
@@ -103,8 +109,19 @@ async function handleCursorContinue(
   };
 }
 
-async function handler(rawInput: ContinueInput): Promise<FinnyEnvelope> {
+async function handler(rawInput: ContinueInput, session?: Session): Promise<FinnyEnvelope> {
   const input = continueInputSchema.parse(rawInput);
+
+  // Task 4.3 — identity gate at boundary. continue reads existing state
+  // (conversation / cursor); the caller-principal string still routes
+  // cursor ownership below (defense-in-depth over legacy input.sessionId).
+  try {
+    await derivePrincipal(session);
+  } catch (e) {
+    if (e instanceof PrincipalError) return unauthorizedEnvelope('finny_continue');
+    throw e;
+  }
+
   // Caller principal — matches query.ts/report.ts: explicit sessionId wins,
   // otherwise the production default. Used to scope cursor drain access.
   const callerPrincipal = input.sessionId ?? 'm2-default:production';

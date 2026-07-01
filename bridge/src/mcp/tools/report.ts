@@ -5,6 +5,12 @@ import { ensureTaskWorker, awaitTaskOrEscalate } from './_shared/taskWorker.js';
 import type { RunQueryParams } from './_shared/chatPipeline.js';
 import { errorEnvelope } from './_shared/envelopeBuilders.js';
 import { REPORT_REGISTRY } from './_shared/reportRegistry.js';
+import {
+  derivePrincipal,
+  PrincipalError,
+  unauthorizedEnvelope,
+  type Session,
+} from './_shared/principal.js';
 
 export const reportInputSchema = z.object({
   report: z.enum([
@@ -25,9 +31,18 @@ export const reportInputSchema = z.object({
 
 export type ReportInput = z.infer<typeof reportInputSchema>;
 
-async function handler(rawInput: ReportInput): Promise<FinnyEnvelope> {
+async function handler(rawInput: ReportInput, session?: Session): Promise<FinnyEnvelope> {
   const input = reportInputSchema.parse(rawInput);
   const envUsed = input.env;
+
+  // Task 4.3 — sealed identity gate. See query.ts for full rationale.
+  try {
+    await derivePrincipal(session);
+  } catch (e) {
+    if (e instanceof PrincipalError) return unauthorizedEnvelope(`finny_report:${input.report}`);
+    throw e;
+  }
+
   const principal = input.sessionId ?? `m2-default:${envUsed}`;
 
   const def = REPORT_REGISTRY[input.report];

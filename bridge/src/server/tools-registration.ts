@@ -14,6 +14,7 @@ import {
   ListToolsRequestSchema,
   type Tool,
 } from '@modelcontextprotocol/sdk/types.js';
+import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { ZodTypeAny } from 'zod';
 
@@ -24,6 +25,7 @@ import * as tools from '../mcp/tools/index.js';
 import { PROMPT_REGISTRY } from '../mcp/prompts/registry.js';
 import { recordEnvelopeForLog, summarizeEnvelopeForLog } from './accessLog.js';
 import type { FinnyEnvelope } from '../types/envelope.js';
+import type { Session } from '../mcp/tools/_shared/principal.js';
 
 export interface ToolRegistrationDeps {
   registry: InstanceRegistry;
@@ -49,15 +51,19 @@ const ALL_TOOLS = [
 ] as const;
 
 type HandlerFn = (
-  input: unknown
+  input: unknown,
+  session?: Session
 ) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 
 export const toolHandlers = new Map<string, HandlerFn>(
   ALL_TOOLS.map((t) => {
-    const fn: HandlerFn = async (input: unknown) => {
+    const fn: HandlerFn = async (input: unknown, session?: Session) => {
       const parsed = (t.inputSchema as ZodTypeAny).parse(input);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const envelope = (await (t.handler as (p: any) => Promise<unknown>)(parsed)) as FinnyEnvelope;
+      const envelope = (await (t.handler as (p: any, s?: Session) => Promise<unknown>)(
+        parsed,
+        session
+      )) as FinnyEnvelope;
       // Record envelope shape for the per-request access log line. No-op
       // in stdio mode (no AsyncLocalStorage context set there).
       try {
@@ -88,11 +94,12 @@ export async function listTools(): Promise<Tool[]> {
 
 export async function callTool(
   name: string,
-  args: unknown
+  args: unknown,
+  session?: Session
 ): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
   const fn = toolHandlers.get(name);
   if (!fn) throw new Error(`unknown tool: ${name}`);
-  return fn(args);
+  return fn(args, session);
 }
 
 /**
@@ -178,7 +185,7 @@ function registerTools(server: Server, _deps: ToolRegistrationDeps): void {
     return { tools: allTools };
   });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: toolArgs } = request.params;
     log(`Executing tool: ${name}`);
 
@@ -187,8 +194,18 @@ function registerTools(server: Server, _deps: ToolRegistrationDeps): void {
       throw new Error(`Unknown tool: ${name}`);
     }
 
+    // Task 4.3: thread verified AuthInfo (bearer token + metadata) from
+    // MCP RequestHandlerExtra into the tool as `session`. Tools call
+    // `derivePrincipal(session)` to enforce sealed identity and bank
+    // authz. `extra.authInfo` is undefined for un-authenticated
+    // transports (e.g. stdio); the transitional behaviour in
+    // `derivePrincipal` handles that path.
+    const session: Session | undefined = extra.authInfo
+      ? { authInfo: extra.authInfo as AuthInfo }
+      : undefined;
+
     try {
-      return await handler(toolArgs);
+      return await handler(toolArgs, session);
     } catch (error) {
       logError(`Error executing tool ${name}`, error);
       throw error;
