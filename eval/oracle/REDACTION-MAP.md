@@ -14,6 +14,7 @@ anywhere in this repo.
 | `MTPL` | `<entity-1>` | Subsidiary code |
 | `finny-<uuid-v4>` | `finny-<session-N>` | Volatile session IDs; index `N` is per-file |
 | `task_<id>_<seq>` | `task_<task-N>` | Volatile async task handles; index `N` is per-file |
+| `conv-<uuid>` or raw `<uuid>` in `conversation_id` | `<conversation-id>` | Per-call random; not semantic. Both forms covered (conversationStore prefixes `conv-`; discover short-circuit emits raw `randomUUID()`). |
 
 ## Placeholders the canonical queries already use
 
@@ -53,9 +54,14 @@ If this command produces any output, the redaction pass is incomplete.
 
 ## Known flaky queries
 
-### q01-vendor-balance-discover
+None. q01 (the only previously-flaky query) was fixed by PR #41
+(`b61e23f`, merged 2026-06-30) and the eval is now a strict gate
+(`--allow-drift 0`).
 
-**Status**: FIXED in `feat/discover-short-circuit` (Issue #40, closes drift).
+### Historical: q01-vendor-balance-discover
+
+**Status**: FIXED in PR #41 (`b61e23f`), oracle refreshed + eval flipped to
+strict in the follow-up consolidation PR.
 
 **Fix**: `bridge/src/mcp/tools/query.ts` now short-circuits `phase: 'discover'`
 for blessed intents. When `phase === 'discover'` AND `lookupIntent(intent)`
@@ -64,17 +70,13 @@ from `entry.required_scope` and returns synchronously. No LLM call, no
 gateway round-trip. Non-blessed intents in `discover` still fall through to
 Finny untouched.
 
-**Operator follow-up after deploy**:
-
-1. Deploy this branch to staging via the normal staging-promotion flow.
-2. Run the staging eval; q01 envelope shape will now be `needs_input` (not
-   `partial`), so the existing captured oracle will diff against the new
-   output. Recapture the oracle for q01 from a staging run that returns the
-   synthesized envelope (drop the `conversation_id` and `elapsed_ms` via
-   the existing redaction pass), then re-run to confirm 20/20 pass.
-3. Once 20/20 baseline is green, open a separate operator-driven PR to flip
-   `.github/workflows/eval-staging.yml --allow-drift` from `1` to `0`. The
-   eval then becomes a real regression gate.
+**Oracle refresh path**: The new q01 oracle was synthesized from the bridge
+code (`bridge/src/mcp/tools/query.ts:21-51`, the `synthesizeDiscoverNeedsInput`
+function) plus the `vendor_balance` bless-list entry
+(`bridge/src/intents/bless-list.json` — `required_scope: vendor_ref, env`).
+The previous live-captured baseline at `eval/runs/2026-06-30-staging-baseline.json`
+predates PR #41 and was not usable for the refresh. First post-merge
+scheduled run against staging serves as ratification.
 
 **Historical context** (for archaeology): the original drift modes were
 `partial`/`running`/`error` rotation depending on upstream Finny latency;

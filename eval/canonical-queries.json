@@ -10,7 +10,7 @@
     },
     "scope": {},
     "expected_envelope_shape": "needs_input",
-    "expected_required_vars": ["vendor", "period", "env"],
+    "expected_required_vars": ["vendor_ref", "env"],
     "prod_oracle_path": "eval/oracle/q01-vendor-balance-discover.json",
     "notes": "Anchors the discover phase + needs_input envelope shape. Identity (tenant/user/bank) is NOT in input — bridge derives it from JWT."
   },
