@@ -9,6 +9,12 @@ import { errorEnvelope, refusedEnvelope } from './_shared/envelopeBuilders.js';
 import { lookupIntent } from '../../intents/loader.js';
 import { validateScope } from '../../intents/validateScope.js';
 import type { BlessListEntry } from '../../intents/types.js';
+import {
+  derivePrincipal,
+  PrincipalError,
+  unauthorizedEnvelope,
+  type Session,
+} from './_shared/principal.js';
 
 const BRIDGE_VERSION = '0.0.1';
 
@@ -93,9 +99,27 @@ export const queryInputSchema = z
 
 export type QueryInput = z.infer<typeof queryInputSchema>;
 
-async function handler(rawInput: QueryInput): Promise<FinnyEnvelope> {
+async function handler(rawInput: QueryInput, session?: Session): Promise<FinnyEnvelope> {
   const input = queryInputSchema.parse(rawInput);
   const envUsed: 'sandbox' | 'production' = input.entity_hints?.env ?? 'production';
+
+  // Task 4.3 — sealed identity: derive verified principal from session
+  // (JWT), never from input. When Zitadel authz is configured on the
+  // bridge, verification failure returns unauthorized. When not yet
+  // configured (transitional), principal is null. Per-bank read
+  // enforcement (canViewBank) fires at the point of bank access —
+  // today that point is downstream in Finny, not in the bridge; when
+  // a future task hoists the bank ID into the bridge dispatcher, add
+  // the canViewBank call at that exact site.
+  try {
+    await derivePrincipal(session);
+  } catch (e) {
+    if (e instanceof PrincipalError) {
+      return unauthorizedEnvelope(input.intent ?? 'finny_query');
+    }
+    throw e;
+  }
+
   const principal = input.sessionId ?? `m2-default:${envUsed}`;
 
   // The textual question carried into Finny's prompt: prefer user_question
