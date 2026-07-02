@@ -248,6 +248,11 @@ echo "=== 4. write .env ==="
 # Values never printed. API_SERVER_KEY is required (existed since v1).
 # HINDSIGHT_API_KEY is required for the External Memory tab routes
 # (/api/external-memory/*); missing key → 503 from those endpoints.
+# ZITADEL_* + NODE_ENV are required for the JWT-verified Zitadel OIDC path
+# (Phase 3.4.5 / SPA OIDC). Missing them → /api/capabilities resolves role
+# to "user" for every caller regardless of actual JWT role — sign-in works
+# but Setup/Client-Admin tabs never appear. Signal:
+# [[finny-dashboard-deploy-clobbers-env]] captured this repeatedly in 2026-07.
 API_KEY=\$(sudo -u ubuntu bash -c "grep '^API_SERVER_KEY=' /home/ubuntu/.hermes/.env | head -1 | cut -d= -f2-")
 if [ -z "\${API_KEY}" ]; then
   echo "ERROR: API_SERVER_KEY missing from ~/.hermes/.env" >&2
@@ -258,15 +263,39 @@ if [ -z "\${HINDSIGHT_KEY}" ]; then
   echo "ERROR: HINDSIGHT_API_KEY missing from ~/.hermes/.env (required for External Memory tab)" >&2
   exit 1
 fi
+# Zitadel keys — best-effort source order: bridge .env, then ~/.hermes/.env,
+# then dashboard .env pre-deploy. First hit wins per key. Missing keys are
+# NOT hard-errors (some envs may not use Zitadel yet), but log a warning.
+zget() {
+  local key="\$1"
+  for f in /opt/finny/bridge/.env /home/ubuntu/.hermes/.env /opt/finny/dashboard/.env; do
+    if [ -f "\$f" ]; then
+      v=\$(sudo grep "^\${key}=" "\$f" 2>/dev/null | head -1 | cut -d= -f2-)
+      if [ -n "\$v" ]; then echo "\$v"; return; fi
+    fi
+  done
+}
+ZITADEL_ISSUER_VAL=\$(zget ZITADEL_ISSUER)
+ZITADEL_AUDIENCE_VAL=\$(zget ZITADEL_AUDIENCE)
+ZITADEL_JWKS_URL_VAL=\$(zget ZITADEL_JWKS_URL)
+ZITADEL_ROLES_CLAIM_VAL=\$(zget ZITADEL_ROLES_CLAIM)
+if [ -z "\${ZITADEL_ISSUER_VAL}" ] || [ -z "\${ZITADEL_AUDIENCE_VAL}" ] || [ -z "\${ZITADEL_JWKS_URL_VAL}" ]; then
+  echo "WARN: one or more ZITADEL_* keys missing across all env sources; dashboard JWT verify will treat all callers as role=user" >&2
+fi
 sudo -u ubuntu bash -c "cat > '\${TARGET}/.env' <<ENV_EOF
 HERMES_API_URL=http://127.0.0.1:8642
 HERMES_API_TOKEN=\${API_KEY}
 HINDSIGHT_API_KEY=\${HINDSIGHT_KEY}
 HOST=127.0.0.1
 PORT=3001
+NODE_ENV=production
+ZITADEL_ISSUER=\${ZITADEL_ISSUER_VAL}
+ZITADEL_AUDIENCE=\${ZITADEL_AUDIENCE_VAL}
+ZITADEL_JWKS_URL=\${ZITADEL_JWKS_URL_VAL}
+ZITADEL_ROLES_CLAIM=\${ZITADEL_ROLES_CLAIM_VAL}
 ENV_EOF"
 sudo chmod 600 "\${TARGET}/.env"
-echo ".env written (mode 600)"
+echo ".env written (mode 600) — includes ZITADEL_* + NODE_ENV"
 
 echo
 echo "=== 5. install systemd unit ==="
